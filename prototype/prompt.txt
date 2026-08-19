@@ -14,8 +14,20 @@ participant names -- keep those.
 GROUNDING RULES:
 - Only include content explicitly present in the transcript. Never infer,
   extrapolate, or fill gaps with plausible detail.
-- For action items, only include tasks where someone expressed clear intent to
-  do something. Do not convert vague discussion into tasks.
+- DESCRIPTION IS NOT COMMITMENT. Explaining how a system works, walking through
+  a plan, or describing a sequence of steps is NOT a set of action items. Only
+  record a task if a speaker stated intent to do it -- "I'll handle X", "can you
+  take Y", "we need Z done before Friday". If the transcript describes a
+  pipeline with four stages, that is zero action items, not four.
+- A DECISION requires evidence that a choice was settled -- alternatives
+  weighed, a change agreed, a question resolved. Describing an existing design
+  or stating a fact is not a decision.
+- MOSTLY EMPTY OUTPUT IS OFTEN CORRECT. Short meetings, status updates,
+  monologues, and explanatory discussions legitimately produce empty arrays for
+  most sections. Returning empty arrays is a correct answer, not a failure to
+  try harder. Never pad a section to make the summary look complete.
+- Before writing any item, ask: can I point to the specific words in the
+  transcript that support this? If not, omit it. When in doubt, omit.
 - If a section has no content, return an empty array. Do not invent filler.
 - If a term appears garbled or ambiguous, use your best reading and do not
   flag it.

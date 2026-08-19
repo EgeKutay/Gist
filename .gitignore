@@ -1,2 +1,10 @@
 .env
 test/
+design/
+prototype/
+backend/target/
+backend/storage/
+storage/
+node_modules/
+.expo/
+__pycache__/

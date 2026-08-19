@@ -99,8 +99,12 @@ and return a clear error if it doesn't conform.
    and Postgres schema. Verify it starts.
 2. Transcription endpoint + ffmpeg conversion. Verify against `test/sample.mp4`
    — it must produce the same transcript the prototype did.
-3. Summarize endpoint. Verify it produces the same shape as
-   `test/sample.summary.json`.
+3. Summarize endpoint. Verify it produces the correct *schema*. Do NOT use any
+   stored summary as a correctness oracle — the first prototype run
+   hallucinated five action items from a transcript containing zero
+   commitments (see `test/cases/monologue-no-commitments/`). Correctness for
+   this step means: valid schema, and output matching `expected.json` for that
+   case — specifically empty `action_items` and `next_steps`.
 4. Expo app skeleton with navigation and the recordings list against the API.
 5. Record screen with audio capture and upload.
 6. Detail screen with editable transcript and summary rendering.

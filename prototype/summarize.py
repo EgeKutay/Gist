@@ -44,13 +44,19 @@ def die(message):
 
 
 def load_dotenv():
-    """Read KEY=VALUE lines from .env next to this script, if it exists.
+    """Read KEY=VALUE lines from .env from the repo root, if present.
 
     Existing environment variables win, so `$env:GROQ_API_KEY = "..."` in the
     shell still overrides the file.
     """
-    env_path = Path(__file__).with_name(".env")
-    if not env_path.is_file():
+    # .env sits at the repo root, a level above prototype/ -- walk upward so
+    # these scripts run from either location.
+    env_path = next(
+        (p / ".env" for p in Path(__file__).resolve().parents
+         if (p / ".env").is_file()),
+        None,
+    )
+    if env_path is None:
         return
     for line in env_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()

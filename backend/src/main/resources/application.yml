@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: gist-backend
+  datasource:
+    url: ${GIST_DB_URL:jdbc:postgresql://localhost:5433/gist}
+    username: ${GIST_DB_USER:gist}
+    password: ${GIST_DB_PASSWORD:gist}
+  jpa:
+    # Flyway owns the schema; Hibernate only checks the entities match it.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      # A ~2h recording straight off a phone, before ffmpeg shrinks it.
+      max-file-size: 200MB
+      max-request-size: 210MB
+
+server:
+  # 0.0.0.0 so a phone on the same Wi-Fi can reach the API, not just localhost.
+  address: 0.0.0.0
+  port: 8080
+
+gist:
+  storage:
+    # Where converted audio is kept. Relative to the backend working directory.
+    dir: ${GIST_STORAGE_DIR:./storage}
+  ffmpeg:
+    # On PATH here; overridable because the winget install path carries a
+    # build number that changes on upgrade.
+    path: ${GIST_FFMPEG_PATH:ffmpeg}
+    probe-path: ${GIST_FFPROBE_PATH:ffprobe}
+  audio:
+    # Hard ceiling. Bitrate adapts to fit Groq's 25MB cap (64kbps up to
+    # ~49 min, sliding down to ~29kbps at 110 min).
+    max-duration-minutes: 110
+  groq:
+    api-key: ${GROQ_API_KEY:}
+    base-url: https://api.groq.com/openai/v1
+    transcription-model: ${GIST_TRANSCRIPTION_MODEL:whisper-large-v3-turbo}
+    summarization-model: ${GIST_SUMMARIZATION_MODEL:openai/gpt-oss-120b}
+
+logging:
+  level:
+    org.flywaydb: info
