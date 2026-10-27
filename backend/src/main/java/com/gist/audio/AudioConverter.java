@@ -95,13 +95,17 @@ public class AudioConverter {
     }
 
     /**
-     * Runs a process and returns stdout. ffmpeg writes progress to stderr, so
-     * stderr is only surfaced when the exit code is non-zero.
+     * Runs a process and returns its output. ffmpeg writes progress to
+     * stderr, which for a long file can exceed the OS pipe buffer -- merging
+     * stderr into stdout (one pipe, drained as it's produced) avoids the
+     * deadlock that reading stdout-then-stderr sequentially would cause.
      */
     private String run(List<String> command, Duration timeout, String tool) {
         Process process;
         try {
-            process = new ProcessBuilder(command).start();
+            process = new ProcessBuilder(command)
+                    .redirectErrorStream(true)
+                    .start();
         } catch (IOException e) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
                     tool + " could not be started. Is it installed and on PATH? "
@@ -109,10 +113,7 @@ public class AudioConverter {
         }
 
         try {
-            // Drain both pipes before waiting, or a chatty ffmpeg fills the OS
-            // buffer and blocks forever.
-            byte[] stdout = process.getInputStream().readAllBytes();
-            byte[] stderr = process.getErrorStream().readAllBytes();
+            byte[] output = process.getInputStream().readAllBytes();
 
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly();
@@ -120,13 +121,13 @@ public class AudioConverter {
                         tool + " took longer than " + timeout.toMinutes() + " minutes and was stopped.");
             }
             if (process.exitValue() != 0) {
-                String detail = new String(stderr, StandardCharsets.UTF_8).trim();
+                String detail = new String(output, StandardCharsets.UTF_8).trim();
                 log.error("{} failed (exit {}): {}", tool, process.exitValue(), detail);
                 throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
                         tool + " could not process that file. It may be corrupt or "
                                 + "in an unsupported format.");
             }
-            return new String(stdout, StandardCharsets.UTF_8);
+            return new String(output, StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Failed while reading output from " + tool + ".", e);

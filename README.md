@@ -68,21 +68,36 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.10"
 
 | Method | Path | Notes |
 |---|---|---|
+| `POST` | `/api/auth/register` | `{"email","password"}` → `{token, expiresAt, user}`. Password ≥ 8 chars. |
+| `POST` | `/api/auth/login` | same body and response; 10 wrong passwords per email locks it for 15 min |
+| `GET` | `/api/auth/me` | the signed-in user; 401 once the token has expired |
 | `POST` | `/api/recordings` | multipart field `file`. Converts, transcribes, persists. Synchronous. |
 | `GET` | `/api/recordings` | list, newest first, without transcripts |
 | `GET` | `/api/recordings/{id}` | one recording with transcript and summary |
+| `POST` | `/api/recordings/{id}/summarize` | summarizes the current stored transcript, persists and returns it. Synchronous. |
 | `DELETE` | `/api/recordings/{id}` | removes the row and the stored audio |
+| `POST` | `/api/recordings/{id}/email` | mail the summary; `{"to":[...]}` optional |
+
+Every route except `/api/health`, register and login requires `Authorization: Bearer <token>` and only ever returns the caller's own recordings. Tokens last 30 days; there is no server-side session, so signing out just discards the token.
 
 ```powershell
+# Sign up once (or /login afterwards) and keep the token
+$s = Invoke-RestMethod -Uri http://localhost:8080/api/auth/register -Method Post `
+  -ContentType application/json -Body '{"email":"me@example.com","password":"correct horse"}'
+$h = @{ Authorization = "Bearer $($s.token)" }
+
 # Upload and transcribe
-Invoke-RestMethod -Uri http://localhost:8080/api/recordings -Method Post `
+Invoke-RestMethod -Uri http://localhost:8080/api/recordings -Method Post -Headers $h `
   -Form @{ file = Get-Item test\sample.mp4 }
 
 # List
-Invoke-RestMethod http://localhost:8080/api/recordings
+Invoke-RestMethod http://localhost:8080/api/recordings -Headers $h
+
+# Summarize (uses the id returned by the upload or the list)
+Invoke-RestMethod -Uri "http://localhost:8080/api/recordings/<id>/summarize" -Method Post -Headers $h
 
 # Delete
-Invoke-RestMethod -Uri "http://localhost:8080/api/recordings/<id>" -Method Delete
+Invoke-RestMethod -Uri "http://localhost:8080/api/recordings/<id>" -Method Delete -Headers $h
 ```
 
 ### Audio conversion
@@ -103,6 +118,44 @@ chosen per recording as the highest that still fits Groq's 25 MB cap, capped at
 prototype's transcript exactly; below it Whisper stays confident but introduces
 sentence-boundary artifacts. Opus was measured and rejected -- better fidelity
 per byte, noticeably worse transcription.
+
+## Accounts, encryption and email — one-time setup
+
+Everything here is free-tier.
+
+### 1. Accounts
+
+Email + password, handled by the backend itself: bcrypt hashes in the `users`
+table, 30-day HS256 tokens signed with `GIST_JWT_SECRET` (already generated into
+`.env`; make another the same way as the encryption key below, but never reuse
+it). Changing the secret signs everyone out. There is no password reset yet --
+it needs working email first.
+
+### 2. Encryption key
+
+Already generated into `.env`. To make another:
+
+```powershell
+$rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+$b = New-Object byte[] 32
+$rng.GetBytes($b)
+[Convert]::ToBase64String($b)
+```
+
+Do **not** use `[RandomNumberGenerator]::Fill()` — it does not exist in Windows
+PowerShell 5.1 and fails silently into an all-zeros key. The backend now refuses
+to start on such a key, but only after it has been written.
+
+**Losing this key makes every stored transcript permanently unreadable.** Back it
+up outside the repo.
+
+### 3. Resend (email)
+
+1. Sign up at resend.com, create an API key → `RESEND_API_KEY`.
+2. **Verify a sending domain** (Domains → add the SPF/DKIM records). Until then
+   Resend delivers **only to your own account address**, so sending to a
+   colleague fails with a 422. Set `GIST_MAIL_FROM` to an address at the
+   verified domain once done.
 
 ## Run the app
 
@@ -156,7 +209,11 @@ overridable by environment variable.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `GROQ_API_KEY` | *(none)* | Groq key. Required from step 2 onward. |
+| `GROQ_API_KEY` | *(none)* | Groq key |
+| `GIST_JWT_SECRET` | *(none)* | Base64 of 32+ random bytes; signs session tokens. **Required to start.** |
+| `GIST_ENCRYPTION_KEY` | *(none)* | Base64 of 32 random bytes. **Required to start.** |
+| `RESEND_API_KEY` | *(none)* | Mail API key; email is disabled without it |
+| `GIST_MAIL_FROM` | `Gist <onboarding@resend.dev>` | Sender address |
 | `GIST_DB_URL` | `jdbc:postgresql://localhost:5433/gist` | Database |
 | `GIST_DB_USER` / `GIST_DB_PASSWORD` | `gist` / `gist` | Local dev credentials |
 | `GIST_STORAGE_DIR` | `./storage` | Where converted audio is kept |
@@ -197,7 +254,7 @@ python prototype\models.py
 
 - [x] **1. Structure, schema, skeleton** — backend starts, Flyway migrates, health endpoint reaches Postgres
 - [x] **2. Transcription endpoint + ffmpeg conversion** — verified against `test/sample.mp4`: transcript matches the prototype exactly
-- [ ] 3. Summarize endpoint
+- [x] **3. Summarize endpoint** — `POST /api/recordings/{id}/summarize`, schema-validated against the shape in `prompt.txt`; verified against `test/sample_v2.mp4` end to end
 - [x] **4. Expo skeleton + recordings list** — expo-router navigation, IBM Plex fonts, list against `GET /api/recordings`; Android bundle verified
 - [ ] 5. Record screen
 - [ ] 6. Detail screen

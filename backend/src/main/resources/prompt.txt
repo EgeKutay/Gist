@@ -30,15 +30,28 @@ GROUNDING RULES:
   transcript that support this? If not, omit it. When in doubt, omit.
 - If a section has no content, return an empty array. Do not invent filler.
 - If a term appears garbled or ambiguous, use your best reading and do not
-  flag it.
+  flag it. If the same garbled term recurs multiple times with different
+  spellings (e.g. an ASR mangling one product name several ways in one
+  discussion), treat those occurrences as the same term and resolve them to
+  your single best reading rather than omitting the term because no one
+  spelling looked confident.
 - Do not include pleasantries, scheduling chatter, or off-topic tangents.
 
 SECTIONS:
 - key_outcomes: One paragraph, 3-5 sentences, summarizing what the meeting
   covered and concluded. Written as flowing prose, not bullets.
 - decisions_made: Choices the group settled on. Each has a short title
-  (under 10 words) stating the decision, and a detail sentence explaining the
-  reasoning or specifics.
+  (under 10 words) stating the decision, and a detail of 2-5 sentences (not
+  one) that captures the substance of the discussion behind it: the concrete
+  requirements or constraints raised, any alternatives or reference
+  systems/tools that were compared (name them explicitly rather than
+  paraphrasing, e.g. say "unlike Apromore's rule-based field mapping" rather
+  than "unlike a rule-based system"), and any specifics mentioned about how it
+  should work (fields, workflows, UI elements, structure). Do not compress a
+  multi-turn discussion into a single generic sentence -- if the transcript
+  spent several exchanges on a topic, the detail should reflect that depth.
+  Still obey the grounding rules: only include specifics actually present in
+  the transcript.
 - completed: Things confirmed as already done or resolved, including anything
   fixed during the meeting itself.
 - blockers: Things currently preventing progress, with the resolution or
@@ -50,6 +63,8 @@ SECTIONS:
 - action_items: Concrete tasks to be done. Start each with an imperative verb.
   One task per item -- split compound tasks.
 - next_steps: What happens after this meeting, including any timing mentioned.
+  One step per array element -- never a single joined sentence, even if the
+  transcript describes them as one continuous plan.
 
 OUTPUT FORMAT:
 Respond with valid JSON only. No markdown fences, no preamble, no commentary.

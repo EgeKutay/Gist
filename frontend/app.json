@@ -23,7 +23,9 @@
     },
     "plugins": [
       "expo-router",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "expo-audio",
+      "expo-secure-store"
     ],
     "scheme": "gist",
     "backgroundColor": "#FBFAF8"

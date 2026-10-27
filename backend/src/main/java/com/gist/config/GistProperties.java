@@ -10,6 +10,9 @@ public class GistProperties {
     private final Ffmpeg ffmpeg = new Ffmpeg();
     private final Audio audio = new Audio();
     private final Groq groq = new Groq();
+    private final Encryption encryption = new Encryption();
+    private final Auth auth = new Auth();
+    private final Mail mail = new Mail();
 
     public Storage getStorage() {
         return storage;
@@ -25,6 +28,18 @@ public class GistProperties {
 
     public Groq getGroq() {
         return groq;
+    }
+
+    public Encryption getEncryption() {
+        return encryption;
+    }
+
+    public Auth getAuth() {
+        return auth;
+    }
+
+    public Mail getMail() {
+        return mail;
     }
 
     public static class Storage {
@@ -108,6 +123,96 @@ public class GistProperties {
 
         public void setSummarizationModel(String summarizationModel) {
             this.summarizationModel = summarizationModel;
+        }
+    }
+
+    public static class Encryption {
+        private String key = "";
+
+        public String getKey() {
+            return key;
+        }
+
+        public void setKey(String key) {
+            this.key = key;
+        }
+    }
+
+    public static class Auth {
+        private String jwtSecret = "";
+        private int sessionDays = 30;
+        private int maxFailedLogins = 10;
+
+        public String getJwtSecret() {
+            return jwtSecret;
+        }
+
+        public void setJwtSecret(String jwtSecret) {
+            this.jwtSecret = jwtSecret;
+        }
+
+        public int getSessionDays() {
+            return sessionDays;
+        }
+
+        public void setSessionDays(int sessionDays) {
+            this.sessionDays = sessionDays;
+        }
+
+        public int getMaxFailedLogins() {
+            return maxFailedLogins;
+        }
+
+        public void setMaxFailedLogins(int maxFailedLogins) {
+            this.maxFailedLogins = maxFailedLogins;
+        }
+    }
+
+    public static class Mail {
+        private String apiKey = "";
+        private String from = "Gist <onboarding@resend.dev>";
+        private String baseUrl = "https://api.resend.com";
+        private int maxRecipients = 10;
+        private int sendsPerHour = 20;
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+        }
+
+        public String getFrom() {
+            return from;
+        }
+
+        public void setFrom(String from) {
+            this.from = from;
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl;
+        }
+
+        public int getMaxRecipients() {
+            return maxRecipients;
+        }
+
+        public void setMaxRecipients(int maxRecipients) {
+            this.maxRecipients = maxRecipients;
+        }
+
+        public int getSendsPerHour() {
+            return sendsPerHour;
+        }
+
+        public void setSendsPerHour(int sendsPerHour) {
+            this.sendsPerHour = sendsPerHour;
         }
     }
 }

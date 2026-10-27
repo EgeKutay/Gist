@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -38,6 +39,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleBadMultipart(Exception e) {
         return body(HttpStatus.BAD_REQUEST,
                 "Send the audio as a multipart form field named 'file'.");
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleUnreadable(HttpMessageNotReadableException e) {
+        return body(HttpStatus.BAD_REQUEST, "The request body is missing or is not valid JSON.");
     }
 
     /** Anything unmapped is a bug: log the detail, tell the client something useful. */

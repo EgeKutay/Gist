@@ -36,6 +36,23 @@ gist:
     # Hard ceiling. Bitrate adapts to fit Groq's 25MB cap (64kbps up to
     # ~49 min, sliding down to ~29kbps at 110 min).
     max-duration-minutes: 110
+  encryption:
+    # Base64 of 32 random bytes. Startup fails if absent or weak.
+    key: ${GIST_ENCRYPTION_KEY:}
+  auth:
+    # Base64 of 32+ random bytes; signs session tokens. Startup fails if absent.
+    # Changing it signs everyone out.
+    jwt-secret: ${GIST_JWT_SECRET:}
+    # How long a sign-in lasts before the app asks for the password again.
+    session-days: 30
+    # Failed password attempts per email within 15 minutes before lockout.
+    max-failed-logins: 10
+  mail:
+    api-key: ${RESEND_API_KEY:}
+    from: ${GIST_MAIL_FROM:Gist <onboarding@resend.dev>}
+    base-url: https://api.resend.com
+    max-recipients: 10
+    sends-per-hour: 20
   groq:
     api-key: ${GROQ_API_KEY:}
     base-url: https://api.groq.com/openai/v1

@@ -1,5 +1,5 @@
-import { Link, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { Link, useFocusEffect, useNavigation } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -14,9 +14,14 @@ import { formatDate, formatDuration } from '../src/format';
 import { colors, fonts, minHitTarget, radius, space } from '../src/theme';
 
 export default function RecordingsScreen() {
+  const navigation = useNavigation();
   const [items, setItems] = useState<RecordingListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    navigation.setOptions({ headerRight: () => <NewRecordingButton /> });
+  }, [navigation]);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -80,12 +85,25 @@ export default function RecordingsScreen() {
         <View style={styles.centered}>
           <Text style={styles.emptyTitle}>No recordings yet</Text>
           <Text style={styles.emptyBody}>
-            Recordings you make will be transcribed and listed here.
+            Record a meeting or upload an audio file. It will be transcribed and listed here.
           </Text>
         </View>
       }
       renderItem={({ item }) => <RecordingRow item={item} />}
     />
+  );
+}
+
+function NewRecordingButton() {
+  return (
+    <Link href="/recording/new" asChild>
+      <Pressable
+        hitSlop={8}
+        style={({ pressed }) => [styles.newButton, pressed && styles.newButtonPressed]}
+      >
+        <Text style={styles.newButtonLabel}>Record</Text>
+      </Pressable>
+    </Link>
   );
 }
 
@@ -165,6 +183,19 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.border,
     marginLeft: space.xl,
+  },
+
+  newButton: {
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  newButtonPressed: {
+    opacity: 0.6,
+  },
+  newButtonLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 15,
+    color: colors.accent,
   },
 
   badge: {

@@ -1,0 +1,58 @@
+# Production stack. Only Caddy is reachable from outside; Postgres and the
+# backend sit on the internal network. Secrets come from deploy/.env on the
+# server (see .env.example), never from this file.
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gist
+      POSTGRES_USER: gist
+      POSTGRES_PASSWORD: ${GIST_DB_PASSWORD:?set GIST_DB_PASSWORD in deploy/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gist -d gist"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ../backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GIST_DB_URL: jdbc:postgresql://postgres:5432/gist
+      GIST_DB_USER: gist
+      GIST_DB_PASSWORD: ${GIST_DB_PASSWORD}
+      GIST_ENCRYPTION_KEY: ${GIST_ENCRYPTION_KEY:?set GIST_ENCRYPTION_KEY in deploy/.env}
+      GIST_JWT_SECRET: ${GIST_JWT_SECRET:?set GIST_JWT_SECRET in deploy/.env}
+      # Optional at startup: transcribe/summarize report it missing per request.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      GIST_MAIL_FROM: ${GIST_MAIL_FROM:-Gist <onboarding@resend.dev>}
+    volumes:
+      - audio:/data/storage
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      GIST_DOMAIN: ${GIST_DOMAIN:?set GIST_DOMAIN in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  pgdata:
+  audio:
+  caddy-data:
+  caddy-config:

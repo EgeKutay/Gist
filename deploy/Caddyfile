@@ -1,0 +1,6 @@
+# Caddy obtains and renews the Let's Encrypt certificate for GIST_DOMAIN
+# (e.g. 203-0-113-10.sslip.io) on its own.
+{$GIST_DOMAIN} {
+	encode gzip
+	reverse_proxy backend:8080
+}

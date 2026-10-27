@@ -1,6 +1,9 @@
 package com.gist.recording;
 
+import com.gist.crypto.EncryptedJsonConverter;
+import com.gist.crypto.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -8,8 +11,6 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 /**
  * One recording and everything derived from it.
@@ -17,6 +18,10 @@ import org.hibernate.type.SqlTypes;
  * <p>The summary is held as a loose Map rather than a typed record because the
  * model's response is validated against the schema before it ever gets here;
  * see the summarization step.
+ *
+ * <p>Everything derived from what was said in the room -- title, transcript and
+ * both summaries -- is encrypted at rest. Duration, timestamps and ownership
+ * stay plaintext: they carry no meeting content and are needed for indexing.
  */
 @Entity
 @Table(name = "recordings")
@@ -25,7 +30,12 @@ public class Recording {
     @Id
     private UUID id;
 
-    @Column(nullable = false)
+    /** users.id of the owner. Every query is scoped by this. */
+    @Column(name = "user_uid", nullable = false)
+    private UUID userUid;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(nullable = false, columnDefinition = "bytea")
     private String title;
 
     /** Relative to gist.storage.dir, so the storage root can move. */
@@ -35,16 +45,17 @@ public class Recording {
     @Column(name = "duration_sec")
     private BigDecimal durationSec;
 
-    @Column(columnDefinition = "text")
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(columnDefinition = "bytea")
     private String transcript;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
+    @Convert(converter = EncryptedJsonConverter.class)
+    @Column(columnDefinition = "bytea")
     private Map<String, Object> summary;
 
     /** The model's untouched output, so a user edit can be reverted. */
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "summary_original", columnDefinition = "jsonb")
+    @Convert(converter = EncryptedJsonConverter.class)
+    @Column(name = "summary_original", columnDefinition = "bytea")
     private Map<String, Object> summaryOriginal;
 
     /** True when the transcript changed after the summary was generated. */
@@ -58,14 +69,19 @@ public class Recording {
         // for JPA
     }
 
-    public Recording(UUID id, String title, OffsetDateTime createdAt) {
+    public Recording(UUID id, UUID userUid, String title, OffsetDateTime createdAt) {
         this.id = id;
+        this.userUid = userUid;
         this.title = title;
         this.createdAt = createdAt;
     }
 
     public UUID getId() {
         return id;
+    }
+
+    public UUID getUserUid() {
+        return userUid;
     }
 
     public String getTitle() {
