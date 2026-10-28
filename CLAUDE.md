@@ -51,6 +51,7 @@ Packages live under `com.gist`, and each one has a single job:
 - `crypto`: `FieldEncryptor` (AES-256-GCM, random IV per value) plus JPA `AttributeConverter`s.
 - `error`: throw `ApiException(status, message)`. `GlobalExceptionHandler` renders every error as `{status, error}`, and the client shows `error` to the user word for word.
 - `config`: `GistProperties` binds `gist.*` from `application.yml`.
+- `logging`: `RequestLogFilter` logs `->` on arrival and `<-` with status and duration for every request except health. README "Server logs" has the commands to read them.
 
 Upload flow (`POST /api/recordings`): stage the multipart upload to a temp file,
 ffprobe the duration, reject anything over 110 min, pick a bitrate

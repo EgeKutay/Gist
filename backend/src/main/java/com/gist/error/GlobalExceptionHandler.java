@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
@@ -44,6 +45,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleUnreadable(HttpMessageNotReadableException e) {
         return body(HttpStatus.BAD_REQUEST, "The request body is missing or is not valid JSON.");
+    }
+
+    /**
+     * The client hung up before the response was written -- usually the app's
+     * timeout expiring during a long upload. The work itself may have
+     * succeeded, and there is nobody left to answer, so this is not a bug.
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleClientGone(AsyncRequestNotUsableException e) {
+        log.warn("Client disconnected before the response was sent: {}", e.getMessage());
     }
 
     /** Anything unmapped is a bug: log the detail, tell the client something useful. */

@@ -4,5 +4,8 @@
 # No `encode gzip`: the app's fetch (Expo, Android) never resolved gzipped
 # responses, so every response over Caddy's 512-byte threshold timed out.
 {$GIST_DOMAIN} {
+	# Access log to stdout (docker logs): status, size and duration per
+	# request, including ones the backend never answered.
+	log
 	reverse_proxy backend:8080
 }

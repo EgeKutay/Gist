@@ -102,10 +102,14 @@ public class RecordingService {
             rejectIfTooLong(sourceSeconds);
 
             int bitrate = converter.bitrateKbpsFor(sourceSeconds);
-            log.info("Converting {} ({} s) at {} kbps", file.getOriginalFilename(),
-                    Math.round(sourceSeconds), bitrate);
+            log.info("Converting {} ({} s, {} bytes) at {} kbps", file.getOriginalFilename(),
+                    Math.round(sourceSeconds), file.getSize(), bitrate);
+            long convertStart = System.nanoTime();
             converter.convertToMono16k(upload, converted, bitrate);
-            rejectIfStillTooLarge(storage.sizeOf(converted));
+            long convertedBytes = storage.sizeOf(converted);
+            log.info("Converted to {} bytes in {} ms", convertedBytes,
+                    (System.nanoTime() - convertStart) / 1_000_000);
+            rejectIfStillTooLarge(convertedBytes);
 
             TranscriptionResult result = transcription.transcribe(converted);
 

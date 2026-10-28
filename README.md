@@ -209,6 +209,39 @@ scan the QR code that `npm start` prints.
 | "Cannot reach the server at ..." | Backend not running, phone on a different network, or the firewall rule is missing |
 | List loads on the laptop but not the phone | Almost always the firewall rule |
 | Worked yesterday, not today | The LAN IP changed — update `frontend\.env` |
+| "The upload is taking longer than expected" | The app stopped waiting, but the server usually finishes. Check the list before uploading again |
+
+### Server logs
+
+Run these on the server (`ssh root@<server IP>`). The backend logs one `->`
+line when a request arrives and one `<-` line with its status and duration
+when it finishes. For an upload, the gap between `->` and `Converting` is the
+time spent sending the file.
+
+```bash
+cd /opt/gist/deploy
+
+# Follow the backend live, then reproduce the problem on the phone
+docker compose logs -f --tail 50 backend
+
+# Last hour, without stack-trace noise
+docker compose logs --since 1h backend | grep -v '^\s*at '
+
+# Just the upload pipeline: arrival, conversion, transcription, result
+docker compose logs --since 3h backend | grep -E 'POST /api/recordings|Convert|Transcribed|disconnected|ERROR'
+
+# Errors only
+docker compose logs --since 24h backend | grep -E 'ERROR|WARN' | grep -v '^\s*at '
+
+# Caddy access log: what the proxy saw, including requests the backend never answered
+docker compose logs --since 1h caddy | grep '"uri"' | tail -20
+
+# Container health and restarts
+docker compose ps
+```
+
+`Client disconnected before the response was sent` means the app gave up
+first. The work itself usually completed, so check the list.
 
 ## Configuration
 

@@ -9,8 +9,12 @@ import { currentToken, notifyExpired, type SessionUser } from './session';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
-/** Transcription of a long recording can hold the request open for minutes. */
-const UPLOAD_TIMEOUT_MS = 300_000;
+/**
+ * Covers sending the file as well as converting and transcribing it. A
+ * 45-minute recording took ~4 min to upload over mobile data plus ~1 min on
+ * the server, which overran the old 5-minute limit.
+ */
+const UPLOAD_TIMEOUT_MS = 20 * 60_000;
 const READ_TIMEOUT_MS = 15_000;
 
 export type RecordingListItem = {
@@ -203,7 +207,15 @@ export function uploadRecording(
         reject(errorFromResponse(path, xhr.status, xhr.responseText));
       }
     };
-    xhr.ontimeout = () => reject(new ApiError('The server took too long to respond.', 0));
+    // The server keeps working after the app stops waiting, so the recording
+    // often appears anyway; uploading again would make a duplicate.
+    xhr.ontimeout = () =>
+      reject(
+        new ApiError(
+          'The upload is taking longer than expected. The server may still finish it, so check the list in a few minutes before trying again.',
+          0,
+        ),
+      );
     xhr.onerror = () => reject(unreachable(`upload ${path}`, xhr.responseText || 'network error'));
     xhr.send(form);
   });
