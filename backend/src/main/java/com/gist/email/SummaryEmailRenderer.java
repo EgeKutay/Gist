@@ -7,7 +7,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.util.HtmlUtils;
 
 /**
- * Renders a summary as HTML with a plain-text alternative.
+ * Renders a summary, a full transcript, or both as HTML with a plain-text
+ * alternative. Either part may be null, but not both.
  *
  * <p>Section order and the rule that empty sections vanish entirely both match
  * the detail screen, so the mail and the app never disagree about what a
@@ -28,11 +29,13 @@ public class SummaryEmailRenderer {
     private record Section(String key, String label) {
     }
 
-    public String subject(String title) {
-        return "Summary: " + title;
+    public String subject(String title, boolean hasSummary, boolean hasTranscript) {
+        String what = hasSummary && hasTranscript ? "Summary and transcript"
+                : hasTranscript ? "Transcript" : "Summary";
+        return what + ": " + title;
     }
 
-    public String html(String title, Map<String, Object> summary) {
+    public String html(String title, Map<String, Object> summary, String transcript) {
         StringBuilder b = new StringBuilder();
         b.append("<div style=\"font-family:-apple-system,Segoe UI,sans-serif;")
                 .append("max-width:640px;margin:0 auto;padding:24px;color:#1C1A17;")
@@ -40,6 +43,23 @@ public class SummaryEmailRenderer {
         b.append("<h1 style=\"font-size:20px;margin:0 0 20px;\">")
                 .append(HtmlUtils.htmlEscape(title)).append("</h1>");
 
+        if (summary != null) {
+            appendSummaryHtml(b, summary);
+        }
+        if (transcript != null) {
+            b.append(heading("Full transcript"));
+            b.append("<p style=\"font-size:15px;line-height:1.7;color:#3A362F;margin:0 0 20px;")
+                    .append("white-space:pre-wrap;\">")
+                    .append(HtmlUtils.htmlEscape(transcript.strip())).append("</p>");
+        }
+
+        b.append("<p style=\"font-size:12px;color:#9A938A;border-top:1px solid #E8E4DE;")
+                .append("padding-top:14px;margin-top:8px;\">Sent from Gist.</p>");
+        b.append("</div>");
+        return b.toString();
+    }
+
+    private void appendSummaryHtml(StringBuilder b, Map<String, Object> summary) {
         String outcomes = asString(summary.get("key_outcomes"));
         if (!outcomes.isBlank()) {
             b.append(heading("Key outcomes"));
@@ -74,17 +94,21 @@ public class SummaryEmailRenderer {
             }
             b.append("</ul>");
         }
+    }
 
-        b.append("<p style=\"font-size:12px;color:#9A938A;border-top:1px solid #E8E4DE;")
-                .append("padding-top:14px;margin-top:8px;\">Sent from Gist.</p>");
-        b.append("</div>");
+    public String text(String title, Map<String, Object> summary, String transcript) {
+        StringBuilder b = new StringBuilder();
+        b.append(title).append("\n\n");
+        if (summary != null) {
+            appendSummaryText(b, summary);
+        }
+        if (transcript != null) {
+            b.append("FULL TRANSCRIPT\n").append(transcript.strip()).append("\n");
+        }
         return b.toString();
     }
 
-    public String text(String title, Map<String, Object> summary) {
-        StringBuilder b = new StringBuilder();
-        b.append(title).append("\n\n");
-
+    private void appendSummaryText(StringBuilder b, Map<String, Object> summary) {
         String outcomes = asString(summary.get("key_outcomes"));
         if (!outcomes.isBlank()) {
             b.append("KEY OUTCOMES\n").append(outcomes).append("\n\n");
@@ -114,7 +138,6 @@ public class SummaryEmailRenderer {
             }
             b.append("\n");
         }
-        return b.toString();
     }
 
     private String heading(String label) {

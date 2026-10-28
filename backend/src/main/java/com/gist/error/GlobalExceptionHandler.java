@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
@@ -45,6 +46,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleUnreadable(HttpMessageNotReadableException e) {
         return body(HttpStatus.BAD_REQUEST, "The request body is missing or is not valid JSON.");
+    }
+
+    /**
+     * Almost always an app newer than the server it talks to: the route exists
+     * in the code but not in the build that is running.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> handleMethod(HttpRequestMethodNotSupportedException e) {
+        return body(HttpStatus.METHOD_NOT_ALLOWED,
+                "The server does not support this action yet. It is probably running an older "
+                        + "version: redeploy the backend.");
     }
 
     /**

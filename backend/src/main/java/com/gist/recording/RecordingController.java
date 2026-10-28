@@ -75,14 +75,16 @@ public class RecordingController {
     }
 
     /**
-     * Mail the summary. With no recipients given it goes to the signed-in
-     * address, which is the common case.
+     * Mail the summary and/or the full transcript. With no recipients given it
+     * goes to the signed-in address, which is the common case.
      */
     @PostMapping("/{id}/email")
     public Map<String, Object> email(@AuthenticationPrincipal GistPrincipal user,
                                      @PathVariable UUID id,
                                      @Valid @RequestBody(required = false) EmailSummaryRequest body) {
-        List<String> sentTo = service.emailSummary(user, id, body == null ? null : body.to());
+        EmailSummaryRequest request = body == null ? new EmailSummaryRequest(null, null, null) : body;
+        List<String> sentTo = service.emailRecording(user, id, request.to(),
+                request.wantsSummary(), request.wantsTranscript());
         return Map.of("sent", true, "recipients", sentTo);
     }
 }

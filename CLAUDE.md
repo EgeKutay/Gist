@@ -58,7 +58,7 @@ ffprobe the duration, reject anything over 110 min, pick a bitrate
 (`bitrateKbpsFor`, at most 64 kbps, sized to fit Groq's 25 MB cap), convert to
 mono 16 kHz AAC, transcribe, save. Summarization is a separate
 `POST /{id}/summarize` call. `PATCH /{id}` with `{title}` renames (trimmed, at
-most 200 characters), and `DELETE /{id}` removes the row and its audio file. Email is `POST /{id}/email`, limited in memory per
+most 200 characters), and `DELETE /{id}` removes the row and its audio file. Email is `POST /{id}/email` (summary, transcript or both), limited in memory per
 user per hour.
 
 ## Invariants: do not break these

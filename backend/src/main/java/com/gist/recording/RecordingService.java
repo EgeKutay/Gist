@@ -194,27 +194,39 @@ public class RecordingService {
     }
 
     /**
-     * Mail this recording's summary.
+     * Mail this recording's summary, its full transcript, or both.
      *
      * <p>An endpoint that sends mail to addresses supplied in the request is a
      * spam relay unless it is bounded, so recipients are capped and each user
      * gets a fixed number of sends per hour.
      */
-    public List<String> emailSummary(GistPrincipal user, UUID id, List<String> requested) {
+    public List<String> emailRecording(GistPrincipal user, UUID id, List<String> requested,
+                                       boolean includeSummary, boolean includeTranscript) {
+        if (!includeSummary && !includeTranscript) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Choose what to send: the summary, the transcript, or both.");
+        }
         Recording recording = get(user.uid(), id);
-        if (recording.getSummary() == null) {
+        if (includeSummary && recording.getSummary() == null) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                    "This recording has no summary yet. Summarize it first.");
+                    "This recording has no summary yet. Summarize it first, or send only the transcript.");
+        }
+        String transcript = recording.getTranscript();
+        if (includeTranscript && (transcript == null || transcript.isBlank())) {
+            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "This recording has no transcript to send.");
         }
 
         List<String> recipients = resolveRecipients(user, requested);
         enforceRateLimit(user.uid());
 
         String title = recording.getTitle();
+        Map<String, Object> summary = includeSummary ? recording.getSummary() : null;
+        String body = includeTranscript ? transcript : null;
         email.send(recipients,
-                emailRenderer.subject(title),
-                emailRenderer.html(title, recording.getSummary()),
-                emailRenderer.text(title, recording.getSummary()));
+                emailRenderer.subject(title, summary != null, body != null),
+                emailRenderer.html(title, summary, body),
+                emailRenderer.text(title, summary, body));
         return recipients;
     }
 

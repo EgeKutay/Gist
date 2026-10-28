@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import {
   ApiError,
-  emailSummary,
+  emailRecording,
   getRecording,
   summarizeRecording,
   type Recording,
@@ -47,6 +47,13 @@ const LIST_SECTIONS: { key: ListKey; label: string; short: string; marker: Marke
   { key: 'next_steps', label: 'Next steps', short: 'Next steps', marker: 'arrow' },
 ];
 
+// Transcript first: it exists from the moment a recording does, and the
+// summary is made from it.
+const TAB_OPTIONS: { key: Tab; label: string }[] = [
+  { key: 'transcript', label: 'Transcript' },
+  { key: 'summary', label: 'Summary' },
+];
+
 // The index row only earns its space once there is something to jump between.
 const MIN_SECTIONS_FOR_INDEX = 3;
 
@@ -57,7 +64,7 @@ export default function RecordingDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
   const [summarizeError, setSummarizeError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('summary');
+  const [tab, setTab] = useState<Tab>('transcript');
   const [actionsOpen, setActionsOpen] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
@@ -71,6 +78,8 @@ export default function RecordingDetailScreen() {
       .then((r) => {
         if (!cancelled) {
           setRecording(r);
+          // Open on the summary once there is one; until then the transcript is all there is.
+          setTab(r.summary ? 'summary' : 'transcript');
         }
       })
       .catch((e) => {
@@ -83,20 +92,12 @@ export default function RecordingDetailScreen() {
     };
   }, [id]);
 
-  useEffect(() => {
-    if (recording) {
-      navigation.setOptions({
-        title: recording.title,
-        headerRight: () => <OptionsButton onPress={() => setActionsOpen(true)} />,
-      });
-    }
-  }, [navigation, recording]);
-
   const summarize = async () => {
     setSummarizing(true);
     setSummarizeError(null);
     try {
       setRecording(await summarizeRecording(id));
+      switchTab('summary');
     } catch (e) {
       setSummarizeError(e instanceof ApiError ? e.message : 'Could not summarize this recording.');
     } finally {
@@ -111,6 +112,33 @@ export default function RecordingDetailScreen() {
     }
     setTab(next);
   };
+
+  // Pinned in the header so it can be pressed from anywhere in a long
+  // transcript, not only after scrolling past it.
+  const showHeaderSummarize = recording !== null && !recording.summary && tab === 'transcript';
+
+  useEffect(() => {
+    if (recording) {
+      navigation.setOptions({
+        title: recording.title,
+        headerRight: () => (
+          <View style={styles.headerActions}>
+            {showHeaderSummarize ? (
+              <Button
+                label="Summarize"
+                variant="primary"
+                onPress={summarize}
+                busy={summarizing}
+                contentStyle={styles.headerSummarize}
+              />
+            ) : null}
+            <OptionsButton onPress={() => setActionsOpen(true)} />
+          </View>
+        ),
+      });
+    }
+    // summarize only reads id and state setters, so it need not retrigger this.
+  }, [navigation, recording, showHeaderSummarize, summarizing]);
 
   const jumpTo = (sectionY: number) => {
     scrollRef.current?.scrollTo({ y: bodyY.current + sectionY - space.md, animated: true });
@@ -162,14 +190,19 @@ export default function RecordingDetailScreen() {
         }}
       >
         {tab === 'transcript' ? (
-          <Text style={styles.transcript} selectable>
-            {recording.transcript ?? 'No transcript.'}
-          </Text>
-        ) : recording.summary ? (
           <>
-            <SummarySections summary={recording.summary} onJump={jumpTo} />
-            <EmailPanel id={id} />
+            {summarizeError ? <Text style={styles.errorNotice}>{summarizeError}</Text> : null}
+            {summarizing ? (
+              <Text style={styles.caption}>
+                Summarizing. Long meetings can take a minute, so keep reading meanwhile.
+              </Text>
+            ) : null}
+            <Text style={styles.transcript} selectable>
+              {recording.transcript ?? 'No transcript.'}
+            </Text>
           </>
+        ) : recording.summary ? (
+          <SummarySections summary={recording.summary} onJump={jumpTo} />
         ) : (
           <FadeIn style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No summary yet</Text>
@@ -190,6 +223,12 @@ export default function RecordingDetailScreen() {
             ) : null}
           </FadeIn>
         )}
+
+        <EmailPanel
+          id={id}
+          hasSummary={recording.summary !== null}
+          hasTranscript={!!recording.transcript?.trim()}
+        />
       </View>
 
       <RecordingActions
@@ -223,8 +262,8 @@ function Tabs({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
   const reduce = useReducedMotion();
   const [width, setWidth] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
-  const thumbWidth = width / 2;
-  const target = value === 'summary' ? 0 : thumbWidth;
+  const thumbWidth = width / TAB_OPTIONS.length;
+  const target = TAB_OPTIONS.findIndex((o) => o.key === value) * thumbWidth;
 
   useEffect(() => {
     if (reduce) {
@@ -239,11 +278,6 @@ function Tabs({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
     }
   }, [x, target, reduce]);
 
-  const options: { key: Tab; label: string }[] = [
-    { key: 'summary', label: 'Summary' },
-    { key: 'transcript', label: 'Transcript' },
-  ];
-
   return (
     <View
       style={styles.tabs}
@@ -255,7 +289,7 @@ function Tabs({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
           style={[styles.tabThumb, { width: thumbWidth, transform: [{ translateX: x }] }]}
         />
       ) : null}
-      {options.map((o) => {
+      {TAB_OPTIONS.map((o) => {
         const selected = o.key === value;
         return (
           <Pressable
@@ -422,17 +456,47 @@ function Section({
 }
 
 /**
- * Sends the summary by mail. Defaults to the signed-in address; extra
- * recipients are added one at a time so a mistyped address is easy to remove.
+ * Sends the summary and/or the full transcript by mail. Defaults to the
+ * signed-in address; extra recipients are added one at a time so a mistyped
+ * address is easy to remove.
  */
-function EmailPanel({ id }: { id: string }) {
+function EmailPanel({
+  id,
+  hasSummary,
+  hasTranscript,
+}: {
+  id: string;
+  hasSummary: boolean;
+  hasTranscript: boolean;
+}) {
   const { user } = useAuth();
+  const [includeSummary, setIncludeSummary] = useState(hasSummary);
+  const [includeTranscript, setIncludeTranscript] = useState(!hasSummary && hasTranscript);
   const [extra, setExtra] = useState<string[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
+
+  // A summary made while this panel is open becomes the thing to send.
+  useEffect(() => {
+    if (hasSummary) {
+      setIncludeSummary(true);
+    }
+  }, [hasSummary]);
+
+  if (!hasSummary && !hasTranscript) {
+    return null;
+  }
+
+  const what =
+    includeSummary && includeTranscript
+      ? 'Summary and transcript'
+      : includeTranscript
+        ? 'Transcript'
+        : 'Summary';
+  const nothingChosen = !includeSummary && !includeTranscript;
 
   const addDraft = () => {
     const address = draft.trim();
@@ -451,10 +515,13 @@ function EmailPanel({ id }: { id: string }) {
     setResult(null);
     try {
       // An empty list means "just me" on the server, so only send extras.
-      const { recipients } = await emailSummary(id, extra);
-      setResult(`Summary sent to ${recipients.join(', ')}`);
+      const { recipients } = await emailRecording(id, extra, {
+        summary: includeSummary,
+        transcript: includeTranscript,
+      });
+      setResult(`${what} sent to ${recipients.join(', ')}`);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not send this summary.');
+      setError(e instanceof ApiError ? e.message : 'Could not send this email.');
     } finally {
       setSending(false);
     }
@@ -462,7 +529,22 @@ function EmailPanel({ id }: { id: string }) {
 
   return (
     <View style={styles.emailPanel}>
-      <Text style={styles.sectionLabel}>Email this summary</Text>
+      <Text style={styles.sectionLabel}>Email this meeting</Text>
+
+      <View style={styles.includeRow}>
+        <IncludeToggle
+          label="Summary"
+          checked={includeSummary}
+          disabled={!hasSummary}
+          onToggle={() => setIncludeSummary(!includeSummary)}
+        />
+        <IncludeToggle
+          label="Full transcript"
+          checked={includeTranscript}
+          disabled={!hasTranscript}
+          onToggle={() => setIncludeTranscript(!includeTranscript)}
+        />
+      </View>
 
       <View style={styles.chipRow}>
         <View style={[styles.chip, styles.chipFixed]}>
@@ -509,9 +591,42 @@ function EmailPanel({ id }: { id: string }) {
         variant="primary"
         onPress={send}
         busy={sending}
+        disabled={nothingChosen}
         style={styles.sendButton}
       />
     </View>
+  );
+}
+
+function IncludeToggle({
+  label,
+  checked,
+  disabled,
+  onToggle,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onToggle}
+      disabled={disabled}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked, disabled }}
+      style={({ pressed }) => [
+        styles.include,
+        checked && styles.includeChecked,
+        pressed && styles.includePressed,
+        disabled && styles.includeDisabled,
+      ]}
+    >
+      <View style={[styles.includeBox, checked && styles.includeBoxChecked]}>
+        {checked ? <View style={styles.includeTick} /> : null}
+      </View>
+      <Text style={[styles.includeLabel, checked && styles.includeLabelChecked]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -535,6 +650,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 36,
     backgroundColor: colors.bg,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  headerSummarize: {
+    minHeight: 34,
+    minWidth: 108,
+    paddingHorizontal: 14,
+    borderRadius: 17,
   },
   optionsButton: {
     width: minHitTarget,
@@ -813,6 +939,48 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  includeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  include: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    minHeight: 40,
+    paddingHorizontal: space.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  includeChecked: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  includePressed: { opacity: 0.75 },
+  includeDisabled: { opacity: 0.4 },
+  includeBox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 1.6,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  includeBoxChecked: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
+  includeTick: {
+    width: 8,
+    height: 4.5,
+    marginTop: -2,
+    borderLeftWidth: 1.6,
+    borderBottomWidth: 1.6,
+    borderColor: '#FFFFFF',
+    transform: [{ rotate: '-45deg' }],
+  },
+  includeLabel: { fontFamily: fonts.sansMedium, fontSize: 14, color: colors.textBody },
+  includeLabelChecked: { color: colors.accent },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   chip: {
     flexDirection: 'row',

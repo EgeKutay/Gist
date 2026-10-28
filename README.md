@@ -76,7 +76,8 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.10"
 | `GET` | `/api/recordings/{id}` | one recording with transcript and summary |
 | `POST` | `/api/recordings/{id}/summarize` | summarizes the current stored transcript, persists and returns it. Synchronous. |
 | `DELETE` | `/api/recordings/{id}` | removes the row and the stored audio |
-| `POST` | `/api/recordings/{id}/email` | mail the summary; `{"to":[...]}` optional |
+| `PATCH` | `/api/recordings/{id}` | rename; `{"title":"..."}` |
+| `POST` | `/api/recordings/{id}/email` | mail the summary and/or transcript; `{"to":[...], "includeSummary":true, "includeTranscript":false}`, all optional |
 
 Every route except `/api/health`, register and login requires `Authorization: Bearer <token>` and only ever returns the caller's own recordings. Tokens last 30 days; there is no server-side session, so signing out just discards the token.
 

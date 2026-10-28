@@ -173,11 +173,20 @@ export function summarizeRecording(id: string): Promise<Recording> {
   return request<Recording>(`/api/recordings/${id}/summarize`, { method: 'POST' });
 }
 
-export function emailSummary(id: string, to?: string[]): Promise<{ recipients: string[] }> {
+/** Mails the summary, the full transcript, or both. An empty `to` means "just me". */
+export function emailRecording(
+  id: string,
+  to: string[],
+  include: { summary: boolean; transcript: boolean },
+): Promise<{ recipients: string[] }> {
   return request<{ recipients: string[] }>(`/api/recordings/${id}/email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to: to ?? [] }),
+    body: JSON.stringify({
+      to,
+      includeSummary: include.summary,
+      includeTranscript: include.transcript,
+    }),
   });
 }
 
