@@ -12,8 +12,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError, listRecordings, type RecordingListItem } from '../src/api';
 import { useAuth } from '../src/auth';
-import { formatDuration } from '../src/format';
-import { MicIcon, UploadIcon } from '../src/icons';
+import { formatDateTime, formatDuration } from '../src/format';
+import { CheckIcon, FilterIcon, MicIcon, UploadIcon } from '../src/icons';
 import { RecordingActions } from '../src/RecordingActions';
 import { fonts, minHitTarget, radius, shadow, space, useColors, type Palette } from '../src/theme';
 import { Button, FadeIn, Sheet } from '../src/ui';
@@ -22,6 +22,42 @@ import { Button, FadeIn, Sheet } from '../src/ui';
 const MAX_STAGGER = 8;
 
 type Styles = ReturnType<typeof makeStyles>;
+
+type DateFilter = 'all' | 'today' | 'week' | 'month' | 'older';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const DATE_FILTERS: { key: DateFilter; label: string }[] = [
+  { key: 'all', label: 'All time' },
+  { key: 'today', label: 'Today' },
+  { key: 'week', label: 'Last 7 days' },
+  { key: 'month', label: 'Last 30 days' },
+  { key: 'older', label: 'Older than 30 days' },
+];
+
+/** Ranges count from the device's local midnight, so "Today" is the user's today. */
+function matchesDateFilter(iso: string, filter: DateFilter): boolean {
+  if (filter === 'all') {
+    return true;
+  }
+  const created = new Date(iso).getTime();
+  if (Number.isNaN(created)) {
+    return false;
+  }
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const start = midnight.getTime();
+  switch (filter) {
+    case 'today':
+      return created >= start;
+    case 'week':
+      return created >= start - 6 * DAY_MS;
+    case 'month':
+      return created >= start - 29 * DAY_MS;
+    case 'older':
+      return created < start - 29 * DAY_MS;
+  }
+}
 
 export default function RecordingsScreen() {
   const router = useRouter();
@@ -35,6 +71,8 @@ export default function RecordingsScreen() {
   const [target, setTarget] = useState<RecordingListItem | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const openActions = (item: RecordingListItem) => {
     setTarget(item);
@@ -93,7 +131,9 @@ export default function RecordingsScreen() {
     );
   }
 
-  const list = items ?? [];
+  const all = items ?? [];
+  const list = all.filter((i) => matchesDateFilter(i.createdAt, dateFilter));
+  const filterLabel = DATE_FILTERS.find((f) => f.key === dateFilter)?.label ?? '';
   const totalMinutes = Math.round(list.reduce((sum, i) => sum + (i.durationSec ?? 0), 0) / 60);
 
   return (
@@ -119,26 +159,61 @@ export default function RecordingsScreen() {
               onRecord={() => router.push('/recording/new')}
               onUpload={() => router.push('/recording/new?pick=1')}
             />
-            {list.length > 0 ? (
+            {all.length > 0 ? (
               <View style={styles.recentHeader}>
-                <Text style={styles.recentTitle}>Recent</Text>
-                <Text style={styles.recentCount}>
-                  {list.length} · {totalMinutes} min
+                <Text style={styles.recentTitle}>
+                  {dateFilter === 'all' ? 'Recent' : filterLabel}
                 </Text>
+                <View style={styles.recentRight}>
+                  <Text style={styles.recentCount}>
+                    {list.length} · {totalMinutes} min
+                  </Text>
+                  <Pressable
+                    onPress={() => setFilterOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Filter by date, showing ${filterLabel}`}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.filterButton,
+                      dateFilter !== 'all' && styles.filterButtonActive,
+                      pressed && styles.filterButtonPressed,
+                    ]}
+                  >
+                    <FilterIcon
+                      size={16}
+                      color={dateFilter === 'all' ? c.textSecondary : c.accent}
+                    />
+                  </Pressable>
+                </View>
               </View>
             ) : null}
           </View>
         }
         ItemSeparatorComponent={() => <View style={styles.rowGap} />}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.stateTitle}>No recordings yet</Text>
-            <Text style={styles.stateBody}>
-              Tap Record to capture a meeting, or upload an audio file from there. It will be
-              transcribed and listed here.
-            </Text>
-            <Text style={styles.hint}>Press and hold a recording to rename or delete it</Text>
-          </View>
+          all.length > 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.stateTitle}>Nothing in this range</Text>
+              <Text style={styles.stateBody}>
+                No recordings from {filterLabel.toLowerCase()}. Pick another range or show them
+                all.
+              </Text>
+              <Button
+                label="Show all"
+                onPress={() => setDateFilter('all')}
+                style={styles.stateAction}
+              />
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <Text style={styles.stateTitle}>No recordings yet</Text>
+              <Text style={styles.stateBody}>
+                Tap Record to capture a meeting, or upload an audio file from there. It will be
+                transcribed and listed here.
+              </Text>
+              <Text style={styles.hint}>Press and hold a recording to rename or delete it</Text>
+            </View>
+          )
         }
         renderItem={({ item, index }) => (
           <FadeIn delay={Math.min(index, MAX_STAGGER) * 40}>
@@ -164,8 +239,59 @@ export default function RecordingsScreen() {
           setItems((current) => (current ?? []).filter((i) => i.id !== target?.id))
         }
       />
+      <DateFilterSheet
+        styles={styles}
+        visible={filterOpen}
+        selected={dateFilter}
+        onSelect={(filter) => {
+          setDateFilter(filter);
+          setFilterOpen(false);
+        }}
+        onClose={() => setFilterOpen(false)}
+      />
       {accountSheet}
     </View>
+  );
+}
+
+function DateFilterSheet({
+  styles,
+  visible,
+  selected,
+  onSelect,
+  onClose,
+}: {
+  styles: Styles;
+  visible: boolean;
+  selected: DateFilter;
+  onSelect: (filter: DateFilter) => void;
+  onClose: () => void;
+}) {
+  const c = useColors();
+  return (
+    <Sheet visible={visible} onClose={onClose}>
+      <View style={styles.sheetBody}>
+        <Text style={styles.sheetHeading}>Show recordings from</Text>
+        <View style={styles.menu}>
+          {DATE_FILTERS.map((f, index) => (
+            <View key={f.key}>
+              {index > 0 ? <View style={styles.menuDivider} /> : null}
+              <Pressable
+                onPress={() => onSelect(f.key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: f.key === selected }}
+                style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+              >
+                <Text style={[styles.menuLabel, f.key === selected && styles.menuLabelSelected]}>
+                  {f.label}
+                </Text>
+                {f.key === selected ? <CheckIcon size={18} color={c.accent} /> : null}
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      </View>
+    </Sheet>
   );
 }
 
@@ -293,7 +419,10 @@ function RecordingRow({
         </Text>
         <View style={styles.status}>
           <View style={[styles.statusDot, { backgroundColor: status.dot }]} />
-          <Text style={styles.statusLabel}>{status.label}</Text>
+          <Text style={styles.statusLabel} numberOfLines={1}>
+            {status.label}
+            <Text style={styles.statusDate}> · {formatDateTime(item.createdAt)}</Text>
+          </Text>
         </View>
       </View>
     </Pressable>
@@ -427,6 +556,27 @@ function makeStyles(c: Palette) {
       fontSize: 15,
       color: c.text,
     },
+    recentRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.sm,
+    },
+    filterButton: {
+      width: 32,
+      height: 32,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    filterButtonActive: {
+      borderColor: c.accent,
+      backgroundColor: c.accentSoft,
+    },
+    filterButtonPressed: {
+      backgroundColor: c.pressed,
+    },
     recentCount: {
       fontFamily: fonts.mono,
       fontSize: 12,
@@ -485,9 +635,14 @@ function makeStyles(c: Palette) {
       borderRadius: 3,
     },
     statusLabel: {
+      flexShrink: 1,
       fontFamily: fonts.sans,
       fontSize: 13,
       color: c.textSecondary,
+    },
+    statusDate: {
+      fontFamily: fonts.mono,
+      fontSize: 12,
     },
 
     empty: {
@@ -521,6 +676,40 @@ function makeStyles(c: Palette) {
 
     sheetBody: {
       gap: space.lg,
+    },
+    sheetHeading: {
+      fontFamily: fonts.sansSemibold,
+      fontSize: 16,
+      color: c.text,
+    },
+    menu: {
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.bg,
+      overflow: 'hidden',
+    },
+    menuRow: {
+      minHeight: minHitTarget + 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: space.lg,
+    },
+    menuRowPressed: {
+      backgroundColor: c.pressed,
+    },
+    menuDivider: {
+      height: 1,
+      backgroundColor: c.divider,
+    },
+    menuLabel: {
+      fontFamily: fonts.sansMedium,
+      fontSize: 15.5,
+      color: c.text,
+    },
+    menuLabelSelected: {
+      color: c.accent,
     },
     sheetText: {
       fontFamily: fonts.sans,

@@ -79,6 +79,16 @@ export function ChevronDownIcon(props: IconProps) {
   );
 }
 
+export function FilterIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <Path d="M3 6h18" />
+      <Path d="M7 12h10" />
+      <Path d="M10 18h4" />
+    </Icon>
+  );
+}
+
 export function CloseIcon(props: IconProps) {
   return (
     <Icon {...props}>

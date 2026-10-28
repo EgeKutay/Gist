@@ -18,7 +18,6 @@ import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -39,12 +38,14 @@ public class RecordingService {
 
     private static final Logger log = LoggerFactory.getLogger(RecordingService.class);
 
-    /** Placeholder until summarization produces a real one. */
     /** Send timestamps per user, for the hourly cap. */
     private final java.util.Map<UUID, List<Long>> sendLog = new ConcurrentHashMap<>();
 
-    private static final DateTimeFormatter TITLE_FORMAT =
-            DateTimeFormatter.ofPattern("MMM d, HH:mm", Locale.ENGLISH);
+    /**
+     * Default title for a new recording. The date is not part of it: the app
+     * shows createdAt next to every recording in the device's own time zone.
+     */
+    private static final String DEFAULT_TITLE = "Meeting";
 
     /**
      * Upload formats, by extension. ffmpeg reads far more, but a short list
@@ -118,8 +119,7 @@ public class RecordingService {
             TranscriptionResult result = transcription.transcribe(converted);
 
             OffsetDateTime now = OffsetDateTime.now();
-            Recording recording = new Recording(UUID.randomUUID(), userUid,
-                    "Meeting — " + TITLE_FORMAT.format(now), now);
+            Recording recording = new Recording(UUID.randomUUID(), userUid, DEFAULT_TITLE, now);
             recording.setAudioPath(storedName);
             recording.setTranscript(result.text());
             // Whisper reports duration in the same response; ffprobe is the
