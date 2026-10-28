@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { authErrorMessage, useAuth } from '../src/auth';
 import { colors, fonts, minHitTarget, radius, space } from '../src/theme';
+import { Button } from '../src/ui';
 
 export default function SignInScreen() {
   const { signIn, signUp } = useAuth();
@@ -20,6 +20,7 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focused, setFocused] = useState<'email' | 'password' | null>(null);
 
   const submit = async () => {
     setBusy(true);
@@ -56,7 +57,9 @@ export default function SignInScreen() {
         <View style={styles.fields}>
           <Text style={styles.label}>Email</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, focused === 'email' && styles.inputFocused]}
+            onFocus={() => setFocused('email')}
+            onBlur={() => setFocused(null)}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -69,7 +72,9 @@ export default function SignInScreen() {
 
           <Text style={styles.label}>Password</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, focused === 'password' && styles.inputFocused]}
+            onFocus={() => setFocused('password')}
+            onBlur={() => setFocused(null)}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -83,23 +88,19 @@ export default function SignInScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Pressable
-          style={({ pressed }) => [styles.primary, pressed && styles.primaryPressed]}
+        <Button
+          label={mode === 'signIn' ? 'Sign in' : 'Create account'}
+          variant="primary"
           onPress={submit}
-          disabled={busy || !email || !password}
-        >
-          {busy ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.primaryLabel}>
-              {mode === 'signIn' ? 'Sign in' : 'Create account'}
-            </Text>
-          )}
-        </Pressable>
+          busy={busy}
+          disabled={!email || !password}
+          style={styles.primary}
+        />
 
         <View style={styles.footer}>
           <Pressable
             hitSlop={8}
+            style={({ pressed }) => pressed && styles.linkPressed}
             onPress={() => {
               setMode(mode === 'signIn' ? 'signUp' : 'signIn');
               setError(null);
@@ -151,26 +152,15 @@ const styles = StyleSheet.create({
     fontSize: 15.5,
     color: colors.text,
   },
-  primary: {
-    minHeight: minHitTarget + 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    backgroundColor: colors.accent,
-    marginTop: space.sm,
-  },
-  primaryPressed: { backgroundColor: colors.accentPressed },
-  primaryLabel: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: 15.5,
-    color: '#FFFFFF',
-  },
+  inputFocused: { borderColor: colors.accent },
+  primary: { marginTop: space.sm },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: space.xs,
   },
+  linkPressed: { opacity: 0.6 },
   link: { fontFamily: fonts.sansMedium, fontSize: 14, color: colors.accent },
   error: {
     fontFamily: fonts.sans,

@@ -18,6 +18,11 @@ export const colors = {
 
   accent: '#3A5A8C',
   accentPressed: '#2C4569',
+  accentSoft: '#EEF2F8',
+
+  // Pressed fill for quiet surfaces (rows, secondary buttons).
+  pressed: '#F4F1EC',
+  record: '#C0392B',
 
   // Stale / warning. Same lightness and chroma as the accent, different hue.
   warning: '#8A6320',
@@ -46,6 +51,7 @@ export const space = {
 export const radius = {
   sm: 7,
   md: 9,
+  lg: 12,
 } as const;
 
 /** Android hit targets: never below 44. */

@@ -95,7 +95,8 @@ public class GroqSummarizationProvider implements SummarizationProvider {
                     .exchange((request, response) -> {
                         String raw = new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8);
                         if (!response.getStatusCode().is2xxSuccessful()) {
-                            throw GroqErrors.map(response.getStatusCode(), response.getHeaders(), raw, model);
+                            throw GroqErrors.map(response.getStatusCode(), response.getHeaders(), raw, model,
+                                    GroqErrors.Step.SUMMARIZATION);
                         }
                         return parse(raw);
                     });
@@ -121,12 +122,22 @@ public class GroqSummarizationProvider implements SummarizationProvider {
     @SuppressWarnings("unchecked")
     private Map<String, Object> parse(String raw) {
         String content;
+        String finishReason;
         try {
-            JsonNode node = mapper.readTree(raw);
-            content = node.path("choices").path(0).path("message").path("content").asText("");
+            JsonNode choice = mapper.readTree(raw).path("choices").path(0);
+            content = choice.path("message").path("content").asText("");
+            finishReason = choice.path("finish_reason").asText("");
         } catch (Exception e) {
             throw new ApiException(HttpStatus.BAD_GATEWAY,
                     "Groq returned a summarization response that could not be read.", e);
+        }
+        // Checked before parsing: a cut-off answer is broken JSON, and "invalid
+        // JSON" would hide the real reason.
+        if ("length".equals(finishReason)) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY,
+                    "The summary was cut off because the model ran out of output length. "
+                            + "Try Summarize again, or set GIST_SUMMARIZATION_MODEL to a model "
+                            + "that allows longer answers.");
         }
         if (content.isBlank()) {
             throw new ApiException(HttpStatus.BAD_GATEWAY, "Groq returned an empty summary.");

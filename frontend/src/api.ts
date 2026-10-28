@@ -161,6 +161,14 @@ export function deleteRecording(id: string): Promise<void> {
   return request<void>(`/api/recordings/${id}`, { method: 'DELETE' });
 }
 
+export function renameRecording(id: string, title: string): Promise<Recording> {
+  return request<Recording>(`/api/recordings/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+}
+
 export function summarizeRecording(id: string): Promise<Recording> {
   return request<Recording>(`/api/recordings/${id}/summarize`, { method: 'POST' });
 }

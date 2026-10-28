@@ -84,7 +84,8 @@ public class GroqTranscriptionProvider implements TranscriptionProvider {
                     .exchange((request, response) -> {
                         String raw = new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8);
                         if (!response.getStatusCode().is2xxSuccessful()) {
-                            throw GroqErrors.map(response.getStatusCode(), response.getHeaders(), raw, model);
+                            throw GroqErrors.map(response.getStatusCode(), response.getHeaders(), raw, model,
+                                    GroqErrors.Step.TRANSCRIPTION);
                         }
                         return parse(raw);
                     });

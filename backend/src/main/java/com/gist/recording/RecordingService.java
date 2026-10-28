@@ -147,6 +147,24 @@ public class RecordingService {
                 HttpStatus.NOT_FOUND, "No recording with id " + id + "."));
     }
 
+    /** Longest title accepted on rename; the list shows two lines of it. */
+    private static final int MAX_TITLE_LENGTH = 200;
+
+    @Transactional
+    public Recording rename(UUID userUid, UUID id, String title) {
+        String trimmed = title == null ? "" : title.trim();
+        if (trimmed.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Give the meeting a name.");
+        }
+        if (trimmed.length() > MAX_TITLE_LENGTH) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Keep the name under " + MAX_TITLE_LENGTH + " characters.");
+        }
+        Recording recording = get(userUid, id);
+        recording.setTitle(trimmed);
+        return recording;
+    }
+
     @Transactional
     public void delete(UUID userUid, UUID id) {
         Recording recording = get(userUid, id);

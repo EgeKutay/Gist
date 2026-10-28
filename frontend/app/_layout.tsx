@@ -12,9 +12,8 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
 import { AuthProvider, useAuth } from '../src/auth';
-import { colors, fonts, space } from '../src/theme';
+import { colors, fonts } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -75,29 +74,10 @@ function RootNavigator() {
       <Stack.Screen name="sign-in" options={{ headerShown: false }} />
       <Stack.Screen
         name="index"
-        options={{ title: 'Recordings', headerLeft: () => <SignOutButton /> }}
+        options={{ title: 'Recordings' }}
       />
       <Stack.Screen name="recording/new" options={{ title: 'New recording' }} />
       <Stack.Screen name="recording/[id]" options={{ title: '' }} />
     </Stack>
   );
 }
-
-function SignOutButton() {
-  const { signOut } = useAuth();
-  return (
-    <Pressable
-      hitSlop={8}
-      onPress={signOut}
-      style={({ pressed }) => [styles.signOut, pressed && styles.signOutPressed]}
-    >
-      <Text style={styles.signOutLabel}>Sign out</Text>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  signOut: { paddingHorizontal: space.sm, paddingVertical: space.sm },
-  signOutPressed: { opacity: 0.6 },
-  signOutLabel: { fontFamily: fonts.sans, fontSize: 15, color: colors.textSecondary },
-});

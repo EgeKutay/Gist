@@ -44,7 +44,7 @@ Packages live under `com.gist`, and each one has a single job:
 - `recording`: controller, service, JPA entity, repository, DTOs. `RecordingService` coordinates all of it.
 - `audio`: `AudioConverter` runs ffmpeg/ffprobe as subprocesses, and `AudioStorage` keeps converted `.m4a` files under `gist.storage.dir`. The DB stores only the file name.
 - `transcription`, `summarization`, `email`: provider **interfaces**.
-- `groq`, `resend`: their only implementations. `GroqErrors` maps Groq HTTP failures (429 with retry-after, 404 unknown model, 401 bad key) to user-facing messages.
+- `groq`, `resend`: their only implementations. `GroqErrors` maps Groq HTTP failures (429 with retry-after, 404 unknown model, 401 bad key, request too large, context length exceeded) to user-facing messages, worded per `Step` (transcription or summarization). A summary cut off at `finish_reason: length` is reported as such, not as invalid JSON.
 - `auth`: email and password accounts in the `users` table (bcrypt). `AuthController` serves `/api/auth/register`, `/login` and `/me`. `AuthService` normalizes emails to lowercase, gives an unknown email and a wrong password the same message and the same timing, and locks an email after too many failures (in memory, 15 min window).
 - `security`: `TokenService` issues and verifies 30-day HS256 JWTs signed with `GIST_JWT_SECRET`. `TokenAuthFilter` reads the `Bearer` token on every request and sets a `GistPrincipal(uid, email)` from the claims alone, with no DB read. Sessions are stateless: there is no session table, signing out means the client drops the token, and rotating the secret signs everyone out. `/api/health`, `/api/auth/register` and `/api/auth/login` are the only public routes.
 - Spring beans with more than one constructor (such as `TokenService`, which has a package-private one that takes a `Clock` for tests) need `@Autowired` on the one Spring should use. Otherwise startup fails with "No default constructor found".
@@ -57,7 +57,8 @@ Upload flow (`POST /api/recordings`): stage the multipart upload to a temp file,
 ffprobe the duration, reject anything over 110 min, pick a bitrate
 (`bitrateKbpsFor`, at most 64 kbps, sized to fit Groq's 25 MB cap), convert to
 mono 16 kHz AAC, transcribe, save. Summarization is a separate
-`POST /{id}/summarize` call. Email is `POST /{id}/email`, limited in memory per
+`POST /{id}/summarize` call. `PATCH /{id}` with `{title}` renames (trimmed, at
+most 200 characters), and `DELETE /{id}` removes the row and its audio file. Email is `POST /{id}/email`, limited in memory per
 user per hour.
 
 ## Invariants: do not break these
@@ -90,10 +91,13 @@ is not a correctness oracle.
 - `src/api.ts` is the only HTTP client. It attaches the session token as `Authorization: Bearer`, applies timeouts (15 s for reads, 5 min for uploads) and turns failures into `ApiError` with the backend's message. Any 401 calls `notifyExpired()`, which signs the app out. `EXPO_PUBLIC_API_URL` must be the laptop's LAN IP, not localhost. On an Android emulator, `http://10.0.2.2:8080` also works.
 - `src/session.ts` keeps the session in `expo-secure-store` (Keychain or Android Keystore), not AsyncStorage, and also holds it in memory so `api.ts` can read the token synchronously.
 - `src/auth.tsx` (`AuthProvider` / `useAuth`) trusts the stored session at launch so the app opens offline, then calls `/api/auth/me` and signs out only on a 401.
+- `src/RecordingActions.tsx` is the rename/delete sheet. The list opens it on long-press and the meeting screen opens it from its header ⋯ button.
+- `src/ui.tsx` holds the shared `Button` (primary / secondary / quiet), `Sheet`, `FadeIn`, and `useReducedMotion`. Every animation checks reduced motion.
+- Do not wrap a `Pressable` with a function `style` in `<Link asChild>`. expo-router's `Slot` drops the function, and the element renders unstyled. Use `router.push` in `onPress`.
 - `src/theme.ts` holds exact design tokens (IBM Plex Sans/Mono) taken from `design/`. Use the tokens and do not invent new values.
 
 ## Known gaps
 
 - There is no `PATCH /api/recordings/{id}/transcript` yet, and the transcript is read-only on the detail screen. `summary_stale` and `summary_original` exist in the schema for this feature, but nothing sets `summary_stale` to true yet.
 - There is no password reset yet. It depends on having working email first.
-- Backend tests cover only `crypto/` and `TokenService`. Nothing else has tests.
+- Backend tests cover only `crypto/`, `TokenService` and `GroqErrors`. Nothing else has tests.
