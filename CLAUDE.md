@@ -48,6 +48,7 @@ Packages live under `com.gist`, and each one has a single job:
 - `auth`: email and password accounts in the `users` table (bcrypt). `AuthController` serves `/api/auth/register`, `/login` and `/me`. `AuthService` normalizes emails to lowercase, gives an unknown email and a wrong password the same message and the same timing, and locks an email after too many failures (in memory, 15 min window).
 - `security`: `TokenService` issues and verifies 30-day HS256 JWTs signed with `GIST_JWT_SECRET`. `TokenAuthFilter` reads the `Bearer` token on every request and sets a `GistPrincipal(uid, email)` from the claims alone, with no DB read. Sessions are stateless: there is no session table, signing out means the client drops the token, and rotating the secret signs everyone out. `/api/health`, `/api/auth/register` and `/api/auth/login` are the only public routes.
 - Spring beans with more than one constructor (such as `TokenService`, which has a package-private one that takes a `Clock` for tests) need `@Autowired` on the one Spring should use. Otherwise startup fails with "No default constructor found".
+- `recipient`: suggested recipients for the email panel (`saved_recipients`, plaintext lowercased like `users.email`). `RecordingService.emailRecording` upserts them after a successful send, never for the user's own address. `GET /api/recipients` and `DELETE /api/recipients/{id}`.
 - `crypto`: `FieldEncryptor` (AES-256-GCM, random IV per value) plus JPA `AttributeConverter`s.
 - `error`: throw `ApiException(status, message)`. `GlobalExceptionHandler` renders every error as `{status, error}`, and the client shows `error` to the user word for word.
 - `config`: `GistProperties` binds `gist.*` from `application.yml`.
@@ -58,7 +59,9 @@ ffprobe the duration, reject anything over 110 min, pick a bitrate
 (`bitrateKbpsFor`, at most 64 kbps, sized to fit Groq's 25 MB cap), convert to
 mono 16 kHz AAC, transcribe, save. Summarization is a separate
 `POST /{id}/summarize` call. `PATCH /{id}` with `{title}` renames (trimmed, at
-most 200 characters), and `DELETE /{id}` removes the row and its audio file. Email is `POST /{id}/email` (summary, transcript or both), limited in memory per
+most 200 characters). `PATCH /{id}/transcript` with `{transcript}` saves the
+user's corrected text (at most 200,000 characters) and sets `summary_stale` when
+a summary exists, and re-summarizing clears it. `DELETE /{id}` removes the row and its audio file. Email is `POST /{id}/email` (summary, transcript or both), limited in memory per
 user per hour.
 
 ## Invariants: do not break these
@@ -91,13 +94,15 @@ is not a correctness oracle.
 - `src/api.ts` is the only HTTP client. It attaches the session token as `Authorization: Bearer`, applies timeouts (15 s for reads, 5 min for uploads) and turns failures into `ApiError` with the backend's message. Any 401 calls `notifyExpired()`, which signs the app out. `EXPO_PUBLIC_API_URL` must be the laptop's LAN IP, not localhost. On an Android emulator, `http://10.0.2.2:8080` also works.
 - `src/session.ts` keeps the session in `expo-secure-store` (Keychain or Android Keystore), not AsyncStorage, and also holds it in memory so `api.ts` can read the token synchronously.
 - `src/auth.tsx` (`AuthProvider` / `useAuth`) trusts the stored session at launch so the app opens offline, then calls `/api/auth/me` and signs out only on a 401.
-- `src/RecordingActions.tsx` is the rename/delete sheet. The list opens it on long-press and the meeting screen opens it from its header ⋯ button.
+- `src/RecordingActions.tsx` is the rename/delete sheet. The list opens it on long-press and the meeting screen opens it from its top-bar ⋯ button.
+- Every screen draws its own top bar, and the native Stack header is hidden. The detail screen has a fixed bottom bar: Email summary or Summarize on the Summary tab, and Edit / Email on the Transcript tab. Email opens a `Sheet`. Home's "Upload audio file" pushes `/recording/new?pick=1`, so there is only one upload flow.
+- `src/icons.tsx` has the stroke icons (react-native-svg, 2 px stroke).
 - `src/ui.tsx` holds the shared `Button` (primary / secondary / quiet), `Sheet`, `FadeIn`, and `useReducedMotion`. Every animation checks reduced motion.
 - Do not wrap a `Pressable` with a function `style` in `<Link asChild>`. expo-router's `Slot` drops the function, and the element renders unstyled. Use `router.push` in `onPress`.
-- `src/theme.ts` holds exact design tokens (IBM Plex Sans/Mono) taken from `design/`. Use the tokens and do not invent new values.
+- `src/theme.ts` holds the "Tape" design tokens (Geist / Geist Mono): `darkColors` and `lightColors` have identical keys, and `useColors()` picks one from the system setting, with dark as the fallback. Styles are built in `makeStyles(c: Palette)` with `useMemo`, never in a module-level `StyleSheet.create`, so a theme switch restyles live. Use `shadow(kind, c)` for shadows. Hex colors live only in `theme.ts`. Use the tokens and do not invent new values.
 
 ## Known gaps
 
-- There is no `PATCH /api/recordings/{id}/transcript` yet, and the transcript is read-only on the detail screen. `summary_stale` and `summary_original` exist in the schema for this feature, but nothing sets `summary_stale` to true yet.
+- `summary_original` is stored but nothing reads it yet. It is meant for reverting user edits to the summary, and those edits don't exist yet.
 - There is no password reset yet. It depends on having working email first.
 - Backend tests cover only `crypto/`, `TokenService` and `GroqErrors`. Nothing else has tests.

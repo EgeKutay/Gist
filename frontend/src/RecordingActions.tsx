@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ApiError, deleteRecording, renameRecording } from './api';
-import { colors, fonts, minHitTarget, radius, space } from './theme';
+import { fonts, minHitTarget, radius, space, useColors, type Palette } from './theme';
 import { Button, Sheet } from './ui';
 
 /**
@@ -21,6 +21,8 @@ export function RecordingActions({
   onRenamed: (title: string) => void;
   onDeleted: () => void;
 }) {
+  const c = useColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const [mode, setMode] = useState<'menu' | 'rename'>('menu');
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -94,9 +96,9 @@ export function RecordingActions({
             {recording.title}
           </Text>
           <View style={styles.menu}>
-            <MenuRow label="Rename" onPress={() => setMode('rename')} />
+            <MenuRow styles={styles} label="Rename" onPress={() => setMode('rename')} />
             <View style={styles.menuDivider} />
-            <MenuRow label="Delete recording" destructive onPress={confirmDelete} />
+            <MenuRow styles={styles} label="Delete recording" destructive onPress={confirmDelete} />
           </View>
         </View>
       ) : (
@@ -112,7 +114,7 @@ export function RecordingActions({
             maxLength={200}
             returnKeyType="done"
             placeholder="Meeting name"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={c.textMuted}
           />
           {error ? <Text style={styles.errorNotice}>{error}</Text> : null}
           <View style={styles.actions}>
@@ -133,10 +135,12 @@ export function RecordingActions({
 }
 
 function MenuRow({
+  styles,
   label,
   onPress,
   destructive = false,
 }: {
+  styles: ReturnType<typeof makeStyles>;
   label: string;
   onPress: () => void;
   destructive?: boolean;
@@ -145,7 +149,6 @@ function MenuRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      android_ripple={{ color: colors.pressed }}
       style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
     >
       <Text style={[styles.menuLabel, destructive && styles.menuLabelDestructive]}>{label}</Text>
@@ -153,79 +156,79 @@ function MenuRow({
   );
 }
 
-const styles = StyleSheet.create({
-  body: {
-    gap: space.md,
-  },
-  heading: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: 16,
-    lineHeight: 21,
-    color: colors.text,
-    marginBottom: space.xs,
-  },
-  menu: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-  },
-  menuRow: {
-    minHeight: minHitTarget + 8,
-    justifyContent: 'center',
-    paddingHorizontal: space.lg,
-  },
-  menuRowPressed: {
-    backgroundColor: colors.pressed,
-  },
-  menuDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  menuLabel: {
-    fontFamily: fonts.sansMedium,
-    fontSize: 15.5,
-    color: colors.text,
-  },
-  menuLabelDestructive: {
-    color: colors.record,
-  },
-  label: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 11,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-    color: colors.textSecondary,
-  },
-  input: {
-    minHeight: minHitTarget + 6,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    borderRadius: radius.md,
-    paddingHorizontal: 15,
-    fontFamily: fonts.sans,
-    fontSize: 16,
-    color: colors.text,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: space.sm,
-    marginTop: space.xs,
-  },
-  action: {
-    flex: 1,
-  },
-  errorNotice: {
-    fontFamily: fonts.sans,
-    fontSize: 13.5,
-    lineHeight: 19,
-    color: colors.warningText,
-    backgroundColor: colors.warningBg,
-    borderWidth: 1,
-    borderColor: colors.warningBorder,
-    borderRadius: radius.sm,
-    padding: 11,
-  },
-});
+function makeStyles(c: Palette) {
+  return StyleSheet.create({
+    body: {
+      gap: space.md,
+    },
+    heading: {
+      fontFamily: fonts.sansSemibold,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+      marginBottom: space.xs,
+    },
+    menu: {
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.bg,
+      overflow: 'hidden',
+    },
+    menuRow: {
+      minHeight: minHitTarget + 8,
+      justifyContent: 'center',
+      paddingHorizontal: space.lg,
+    },
+    menuRowPressed: {
+      backgroundColor: c.pressed,
+    },
+    menuDivider: {
+      height: 1,
+      backgroundColor: c.divider,
+    },
+    menuLabel: {
+      fontFamily: fonts.sansMedium,
+      fontSize: 15.5,
+      color: c.text,
+    },
+    menuLabelDestructive: {
+      color: c.record,
+    },
+    label: {
+      fontFamily: fonts.sansMedium,
+      fontSize: 13,
+      color: c.accent,
+    },
+    input: {
+      minHeight: minHitTarget + 6,
+      backgroundColor: c.bg,
+      borderWidth: 1,
+      borderColor: c.accent,
+      borderRadius: radius.md,
+      paddingHorizontal: 15,
+      fontFamily: fonts.sans,
+      fontSize: 16,
+      color: c.text,
+    },
+    actions: {
+      flexDirection: 'row',
+      gap: space.sm,
+      marginTop: space.xs,
+    },
+    action: {
+      flex: 1,
+    },
+    errorNotice: {
+      fontFamily: fonts.sans,
+      fontSize: 13.5,
+      lineHeight: 19,
+      color: c.warningText,
+      backgroundColor: c.warningBg,
+      borderWidth: 1,
+      borderColor: c.warningBorder,
+      borderRadius: radius.md,
+      padding: 11,
+    },
+  });
+}

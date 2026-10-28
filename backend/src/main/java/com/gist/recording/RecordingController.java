@@ -4,6 +4,7 @@ import com.gist.recording.dto.EmailSummaryRequest;
 import com.gist.recording.dto.RecordingListItem;
 import com.gist.recording.dto.RecordingResponse;
 import com.gist.recording.dto.RenameRecordingRequest;
+import com.gist.recording.dto.UpdateTranscriptRequest;
 import com.gist.security.GistPrincipal;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -58,6 +59,14 @@ public class RecordingController {
                                     @PathVariable UUID id,
                                     @RequestBody RenameRecordingRequest body) {
         return RecordingResponse.from(service.rename(user.uid(), id, body.title()));
+    }
+
+    /** Replace the transcript with the user's corrected text. Marks any summary stale. */
+    @PatchMapping("/{id}/transcript")
+    public RecordingResponse updateTranscript(@AuthenticationPrincipal GistPrincipal user,
+                                              @PathVariable UUID id,
+                                              @RequestBody UpdateTranscriptRequest body) {
+        return RecordingResponse.from(service.updateTranscript(user.uid(), id, body.transcript()));
     }
 
     @DeleteMapping("/{id}")

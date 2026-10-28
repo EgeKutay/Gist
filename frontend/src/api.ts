@@ -169,6 +169,15 @@ export function renameRecording(id: string, title: string): Promise<Recording> {
   });
 }
 
+/** Saves the user's corrected transcript. Any existing summary comes back marked stale. */
+export function updateTranscript(id: string, transcript: string): Promise<Recording> {
+  return request<Recording>(`/api/recordings/${id}/transcript`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transcript }),
+  });
+}
+
 export function summarizeRecording(id: string): Promise<Recording> {
   return request<Recording>(`/api/recordings/${id}/summarize`, { method: 'POST' });
 }
@@ -188,6 +197,18 @@ export function emailRecording(
       includeTranscript: include.transcript,
     }),
   });
+}
+
+/** An address the user has mailed before, offered on the next send. */
+export type SavedRecipient = { id: string; email: string };
+
+/** Most recently used first. Filled in by the server after each successful send. */
+export function listSavedRecipients(): Promise<SavedRecipient[]> {
+  return request<SavedRecipient[]>('/api/recipients');
+}
+
+export function forgetSavedRecipient(id: string): Promise<void> {
+  return request<void>(`/api/recipients/${id}`, { method: 'DELETE' });
 }
 
 export function uploadRecording(

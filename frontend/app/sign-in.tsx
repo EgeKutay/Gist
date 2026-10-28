@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -10,11 +10,13 @@ import {
   View,
 } from 'react-native';
 import { authErrorMessage, useAuth } from '../src/auth';
-import { colors, fonts, minHitTarget, radius, space } from '../src/theme';
+import { fonts, minHitTarget, radius, space, useColors, type Palette } from '../src/theme';
 import { Button } from '../src/ui';
 
 export default function SignInScreen() {
   const { signIn, signUp } = useAuth();
+  const c = useColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -67,7 +69,7 @@ export default function SignInScreen() {
             keyboardType="email-address"
             textContentType="emailAddress"
             placeholder="you@example.com"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={c.textMuted}
           />
 
           <Text style={styles.label}>Password</Text>
@@ -81,7 +83,7 @@ export default function SignInScreen() {
             autoCapitalize="none"
             textContentType={mode === 'signIn' ? 'password' : 'newPassword'}
             placeholder={mode === 'signUp' ? 'At least 8 characters' : ''}
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={c.textMuted}
             onSubmitEditing={submit}
           />
         </View>
@@ -93,6 +95,7 @@ export default function SignInScreen() {
           variant="primary"
           onPress={submit}
           busy={busy}
+          pill
           disabled={!email || !password}
           style={styles.primary}
         />
@@ -116,61 +119,61 @@ export default function SignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  content: { flexGrow: 1, justifyContent: 'center', padding: 28, gap: space.lg },
-  header: { gap: 6, marginBottom: space.sm },
-  title: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: 28,
-    letterSpacing: -0.6,
-    color: colors.text,
-  },
-  body: {
-    fontFamily: fonts.sans,
-    fontSize: 14.5,
-    lineHeight: 21,
-    color: colors.textSecondary,
-  },
-  fields: { gap: 6 },
-  label: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 10.5,
-    letterSpacing: 1.15,
-    textTransform: 'uppercase',
-    color: colors.textMuted,
-    marginTop: space.sm,
-  },
-  input: {
-    minHeight: minHitTarget + 6,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: 15,
-    fontFamily: fonts.sans,
-    fontSize: 15.5,
-    color: colors.text,
-  },
-  inputFocused: { borderColor: colors.accent },
-  primary: { marginTop: space.sm },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: space.xs,
-  },
-  linkPressed: { opacity: 0.6 },
-  link: { fontFamily: fonts.sansMedium, fontSize: 14, color: colors.accent },
-  error: {
-    fontFamily: fonts.sans,
-    fontSize: 13.5,
-    lineHeight: 19,
-    color: colors.warningText,
-    backgroundColor: colors.warningBg,
-    borderWidth: 1,
-    borderColor: colors.warningBorder,
-    borderRadius: radius.sm,
-    padding: 11,
-  },
-});
+function makeStyles(c: Palette) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: c.bg },
+    content: { flexGrow: 1, justifyContent: 'center', padding: 28, gap: space.lg },
+    header: { gap: 6, marginBottom: space.sm },
+    title: {
+      fontFamily: fonts.sansSemibold,
+      fontSize: 28,
+      letterSpacing: -0.6,
+      color: c.text,
+    },
+    body: {
+      fontFamily: fonts.sans,
+      fontSize: 14.5,
+      lineHeight: 21,
+      color: c.textSecondary,
+    },
+    fields: { gap: 6 },
+    label: {
+      fontFamily: fonts.sansMedium,
+      fontSize: 13,
+      color: c.textSecondary,
+      marginTop: space.sm,
+    },
+    input: {
+      minHeight: minHitTarget + 6,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: radius.md,
+      paddingHorizontal: 15,
+      fontFamily: fonts.sans,
+      fontSize: 15.5,
+      color: c.text,
+    },
+    inputFocused: { borderColor: c.accent },
+    primary: { marginTop: space.sm },
+    footer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: space.xs,
+    },
+    linkPressed: { opacity: 0.6 },
+    link: { fontFamily: fonts.sansMedium, fontSize: 14, color: c.accent },
+    error: {
+      fontFamily: fonts.sans,
+      fontSize: 13.5,
+      lineHeight: 19,
+      color: c.warningText,
+      backgroundColor: c.warningBg,
+      borderWidth: 1,
+      borderColor: c.warningBorder,
+      borderRadius: radius.md,
+      padding: 11,
+    },
+  });
+}

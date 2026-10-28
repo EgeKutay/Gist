@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
     },
@@ -23,11 +23,19 @@
     },
     "plugins": [
       "expo-router",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F7F5F0",
+          "dark": {
+            "backgroundColor": "#141310"
+          }
+        }
+      ],
       "expo-audio",
       "expo-secure-store"
     ],
     "scheme": "gist",
-    "backgroundColor": "#FBFAF8"
+    "backgroundColor": "#141310"
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -15,7 +15,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fonts, minHitTarget, radius } from './theme';
+import { fonts, minHitTarget, radius, useColors, type Palette } from './theme';
 
 // Read once at startup and kept current, so the first frame already knows
 // whether to animate instead of starting a motion and then cancelling it.
@@ -100,6 +100,8 @@ export function Sheet({
 }) {
   const insets = useSafeAreaInsets();
   const reduce = useReducedMotion();
+  const c = useColors();
+  const sheetStyles = useMemo(() => makeSheetStyles(c), [c]);
   const rise = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -150,8 +152,9 @@ export function Sheet({
 type Variant = 'primary' | 'secondary' | 'quiet';
 
 /**
- * The one button. Primary is filled accent, secondary is a white surface with
- * a border, quiet is text only. All three dip slightly on press.
+ * The one button. Primary is the filled `primary` colour, secondary is a
+ * surface with a strong border, quiet is text only. All three dip slightly on
+ * press. `pill` is the 52 px rounded shape used in bottom bars.
  */
 export function Button({
   label,
@@ -160,6 +163,7 @@ export function Button({
   disabled = false,
   busy = false,
   leading,
+  pill = false,
   style,
   contentStyle,
   accessibilityLabel,
@@ -170,11 +174,17 @@ export function Button({
   disabled?: boolean;
   busy?: boolean;
   leading?: ReactNode;
+  pill?: boolean;
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
 }) {
   const reduce = useReducedMotion();
+  const c = useColors();
+  const { styles, variantStyles, pressedStyles, labelStyles } = useMemo(
+    () => makeButtonStyles(c),
+    [c],
+  );
   const scale = useRef(new Animated.Value(1)).current;
   const inactive = disabled || busy;
 
@@ -197,6 +207,7 @@ export function Button({
         accessibilityState={{ disabled: inactive, busy }}
         style={({ pressed }) => [
           styles.base,
+          pill && styles.pill,
           variantStyles[variant],
           pressed && pressedStyles[variant],
           disabled && !busy && styles.disabled,
@@ -204,7 +215,7 @@ export function Button({
         ]}
       >
         {busy ? (
-          <ActivityIndicator color={variant === 'primary' ? '#FFFFFF' : colors.accent} />
+          <ActivityIndicator color={variant === 'primary' ? c.onPrimary : c.accent} />
         ) : (
           <>
             {leading}
@@ -216,73 +227,118 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    minHeight: minHitTarget + 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    borderRadius: radius.md,
-  },
-  disabled: {
-    opacity: 0.45,
-  },
-  label: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: 15,
-  },
-});
+function makeButtonStyles(c: Palette) {
+  return {
+    styles: StyleSheet.create({
+      base: {
+        minHeight: minHitTarget + 4,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingHorizontal: 20,
+        borderRadius: radius.md,
+      },
+      pill: {
+        minHeight: 52,
+        borderRadius: radius.pill,
+      },
+      disabled: {
+        opacity: 0.45,
+      },
+      label: {
+        fontFamily: fonts.sansSemibold,
+        fontSize: 15,
+      },
+    }),
+    variantStyles: StyleSheet.create({
+      primary: { backgroundColor: c.primary },
+      secondary: {
+        backgroundColor: c.surface,
+        borderWidth: 1,
+        borderColor: c.borderStrong,
+      },
+      quiet: { paddingHorizontal: 12 },
+    }),
+    pressedStyles: StyleSheet.create({
+      primary: { backgroundColor: c.primaryPressed },
+      secondary: { backgroundColor: c.pressed, borderColor: c.borderStrong },
+      quiet: { backgroundColor: c.pressed },
+    }),
+    labelStyles: StyleSheet.create({
+      primary: { color: c.onPrimary },
+      secondary: { color: c.text, fontFamily: fonts.sansMedium },
+      quiet: { color: c.text, fontFamily: fonts.sansMedium },
+    }),
+  };
+}
 
-const variantStyles = StyleSheet.create({
-  primary: { backgroundColor: colors.accent },
-  secondary: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-  },
-  quiet: { paddingHorizontal: 12 },
-});
+/** A 44 px round tap target for a lone icon, as in the top bars. */
+export function IconButton({
+  onPress,
+  accessibilityLabel,
+  children,
+}: {
+  onPress: () => void;
+  accessibilityLabel: string;
+  children: ReactNode;
+}) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={4}
+      style={({ pressed }) => [
+        {
+          width: minHitTarget,
+          height: minHitTarget,
+          borderRadius: minHitTarget / 2,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        pressed && { backgroundColor: c.pressed },
+      ]}
+    >
+      {children}
+    </Pressable>
+  );
+}
 
-const pressedStyles = StyleSheet.create({
-  primary: { backgroundColor: colors.accentPressed },
-  secondary: { backgroundColor: colors.pressed, borderColor: colors.borderStrong },
-  quiet: { backgroundColor: colors.pressed },
-});
-
-const labelStyles = StyleSheet.create({
-  primary: { color: '#FFFFFF' },
-  secondary: { color: colors.textBody },
-  quiet: { color: colors.accent, fontFamily: fonts.sansMedium },
-});
-
-const sheetStyles = StyleSheet.create({
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: 'rgba(28, 26, 23, 0.32)',
-  },
-  frame: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  panel: {
-    paddingTop: 10,
-    paddingHorizontal: 20,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    backgroundColor: colors.bg,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.borderStrong,
-    marginBottom: 14,
-  },
-});
+function makeSheetStyles(c: Palette) {
+  return StyleSheet.create({
+    backdrop: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      backgroundColor: c.backdrop,
+    },
+    frame: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    panel: {
+      maxHeight: '90%',
+      paddingTop: 10,
+      paddingHorizontal: 20,
+      borderTopLeftRadius: 18,
+      borderTopRightRadius: 18,
+      borderTopWidth: 1,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+    },
+    handle: {
+      alignSelf: 'center',
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: c.borderStrong,
+      marginBottom: 14,
+    },
+  });
+}

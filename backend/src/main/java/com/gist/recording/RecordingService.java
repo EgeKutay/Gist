@@ -6,6 +6,7 @@ import com.gist.config.GistProperties;
 import com.gist.email.EmailAddresses;
 import com.gist.email.EmailProvider;
 import com.gist.email.SummaryEmailRenderer;
+import com.gist.recipient.SavedRecipientService;
 import com.gist.security.GistPrincipal;
 import com.gist.error.ApiException;
 import com.gist.summarization.SummarizationProvider;
@@ -60,6 +61,7 @@ public class RecordingService {
     private final SummarizationProvider summarization;
     private final EmailProvider email;
     private final SummaryEmailRenderer emailRenderer;
+    private final SavedRecipientService savedRecipients;
     private final GistProperties props;
 
     public RecordingService(RecordingRepository repository,
@@ -69,6 +71,7 @@ public class RecordingService {
                             SummarizationProvider summarization,
                             EmailProvider email,
                             SummaryEmailRenderer emailRenderer,
+                            SavedRecipientService savedRecipients,
                             GistProperties props) {
         this.repository = repository;
         this.converter = converter;
@@ -77,6 +80,7 @@ public class RecordingService {
         this.summarization = summarization;
         this.email = email;
         this.emailRenderer = emailRenderer;
+        this.savedRecipients = savedRecipients;
         this.props = props;
     }
 
@@ -165,6 +169,36 @@ public class RecordingService {
         return recording;
     }
 
+    /** Far above a 110-minute meeting (~20k words), so it only stops a runaway paste. */
+    private static final int MAX_TRANSCRIPT_LENGTH = 200_000;
+
+    /**
+     * Replace the transcript with the user's corrected text. A summary made
+     * from the old text no longer matches it, so it is marked stale until the
+     * user re-summarizes.
+     */
+    @Transactional
+    public Recording updateTranscript(UUID userUid, UUID id, String transcript) {
+        String text = transcript == null ? "" : transcript.stripTrailing();
+        if (text.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "The transcript can't be empty. Delete the recording instead if you don't need it.");
+        }
+        if (text.length() > MAX_TRANSCRIPT_LENGTH) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Keep the transcript under " + MAX_TRANSCRIPT_LENGTH + " characters.");
+        }
+        Recording recording = get(userUid, id);
+        if (text.equals(recording.getTranscript())) {
+            return recording;
+        }
+        recording.setTranscript(text);
+        if (recording.getSummary() != null) {
+            recording.setSummaryStale(true);
+        }
+        return recording;
+    }
+
     @Transactional
     public void delete(UUID userUid, UUID id) {
         Recording recording = get(userUid, id);
@@ -227,6 +261,12 @@ public class RecordingService {
                 emailRenderer.subject(title, summary != null, body != null),
                 emailRenderer.html(title, summary, body),
                 emailRenderer.text(title, summary, body));
+        // The mail has gone out; failing to save suggestions must not say otherwise.
+        try {
+            savedRecipients.remember(user.uid(), user.email(), recipients);
+        } catch (RuntimeException e) {
+            log.warn("Could not save suggested recipients: {}", e.getMessage());
+        }
         return recipients;
     }
 

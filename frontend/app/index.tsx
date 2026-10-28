@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,23 +12,29 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError, listRecordings, type RecordingListItem } from '../src/api';
 import { useAuth } from '../src/auth';
-import { formatDate, formatDuration } from '../src/format';
+import { formatDuration } from '../src/format';
+import { MicIcon, UploadIcon } from '../src/icons';
 import { RecordingActions } from '../src/RecordingActions';
-import { colors, fonts, radius, space } from '../src/theme';
-import { Button, FadeIn } from '../src/ui';
+import { fonts, minHitTarget, radius, shadow, space, useColors, type Palette } from '../src/theme';
+import { Button, FadeIn, Sheet } from '../src/ui';
 
 // Rows past this index appear together rather than trickling in.
 const MAX_STAGGER = 8;
 
+type Styles = ReturnType<typeof makeStyles>;
+
 export default function RecordingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const c = useColors();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const [items, setItems] = useState<RecordingListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Kept after the sheet closes so its fade-out still has something to show.
   const [target, setTarget] = useState<RecordingListItem | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const openActions = (item: RecordingListItem) => {
     setTarget(item);
@@ -56,72 +62,88 @@ export default function RecordingsScreen() {
     }, [load]),
   );
 
-  const recordButton = (
-    <View pointerEvents="box-none" style={[styles.fabWrap, { bottom: insets.bottom + 20 }]}>
-      <Button
-        label="Record"
-        variant="primary"
-        onPress={() => router.push('/recording/new')}
-        leading={<View style={styles.fabDot} />}
-        style={styles.fabShadow}
-        contentStyle={styles.fab}
-        accessibilityLabel="New recording"
-      />
-    </View>
+  const topBar = <TopBar styles={styles} onAccount={() => setAccountOpen(true)} />;
+  const accountSheet = (
+    <AccountSheet styles={styles} visible={accountOpen} onClose={() => setAccountOpen(false)} />
   );
 
   if (items === null && error === null) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={colors.accent} />
+      <View style={[styles.screen, styles.padded, { paddingTop: insets.top }]}>
+        {topBar}
+        <View style={styles.centered}>
+          <ActivityIndicator color={c.accent} />
+        </View>
+        {accountSheet}
       </View>
     );
   }
 
   if (error !== null && items === null) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.stateTitle}>Can't load recordings</Text>
-        <Text style={styles.stateBody}>{error}</Text>
-        <Button label="Try again" onPress={() => load()} style={styles.stateAction} />
-        <AccountFooter />
+      <View style={[styles.screen, styles.padded, { paddingTop: insets.top }]}>
+        {topBar}
+        <View style={styles.centered}>
+          <Text style={styles.stateTitle}>Can't load recordings</Text>
+          <Text style={styles.stateBody}>{error}</Text>
+          <Button label="Try again" onPress={() => load()} style={styles.stateAction} />
+        </View>
+        {accountSheet}
       </View>
     );
   }
 
   const list = items ?? [];
+  const totalMinutes = Math.round(list.reduce((sum, i) => sum + (i.durationSec ?? 0), 0) / 60);
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
       <FlatList
         data={list}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[
-          { paddingBottom: insets.bottom + 108 },
-          list.length === 0 && styles.emptyContainer,
-        ]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 32 }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => load(true)}
-            tintColor={colors.accent}
-            colors={[colors.accent]}
+            tintColor={c.accent}
+            colors={[c.accent]}
+            progressBackgroundColor={c.surface}
           />
         }
-        ItemSeparatorComponent={() => <View style={styles.divider} />}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            {topBar}
+            <RecordCard
+              styles={styles}
+              onRecord={() => router.push('/recording/new')}
+              onUpload={() => router.push('/recording/new?pick=1')}
+            />
+            {list.length > 0 ? (
+              <View style={styles.recentHeader}>
+                <Text style={styles.recentTitle}>Recent</Text>
+                <Text style={styles.recentCount}>
+                  {list.length} · {totalMinutes} min
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        }
+        ItemSeparatorComponent={() => <View style={styles.rowGap} />}
         ListEmptyComponent={
-          <View style={styles.centered}>
+          <View style={styles.empty}>
             <Text style={styles.stateTitle}>No recordings yet</Text>
             <Text style={styles.stateBody}>
               Tap Record to capture a meeting, or upload an audio file from there. It will be
               transcribed and listed here.
             </Text>
+            <Text style={styles.hint}>Press and hold a recording to rename or delete it</Text>
           </View>
         }
-        ListFooterComponent={<AccountFooter showHint={list.length > 0} />}
         renderItem={({ item, index }) => (
           <FadeIn delay={Math.min(index, MAX_STAGGER) * 40}>
             <RecordingRow
+              styles={styles}
               item={item}
               onPress={() => router.push(`/recording/${item.id}`)}
               onLongPress={() => openActions(item)}
@@ -129,7 +151,6 @@ export default function RecordingsScreen() {
           </FadeIn>
         )}
       />
-      {recordButton}
       <RecordingActions
         recording={target}
         visible={actionsOpen}
@@ -143,37 +164,117 @@ export default function RecordingsScreen() {
           setItems((current) => (current ?? []).filter((i) => i.id !== target?.id))
         }
       />
+      {accountSheet}
     </View>
   );
 }
 
-/** Signing out is rare, so it lives at the end of the list, not in the header. */
-function AccountFooter({ showHint = false }: { showHint?: boolean }) {
+function TopBar({ styles, onAccount }: { styles: Styles; onAccount: () => void }) {
+  const { user } = useAuth();
+  const initial = user?.email?.charAt(0).toUpperCase() ?? '?';
+  return (
+    <View style={styles.topBar}>
+      <Text style={styles.wordmark}>Gist</Text>
+      <Pressable
+        onPress={onAccount}
+        accessibilityRole="button"
+        accessibilityLabel="Account"
+        style={({ pressed }) => [styles.avatar, pressed && styles.avatarPressed]}
+      >
+        <Text style={styles.avatarLetter}>{initial}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** Signing out is rare, so it sits behind the account button rather than on screen. */
+function AccountSheet({
+  styles,
+  visible,
+  onClose,
+}: {
+  styles: Styles;
+  visible: boolean;
+  onClose: () => void;
+}) {
   const { user, signOut } = useAuth();
   return (
-    <View style={styles.footer}>
-      {showHint ? (
-        <Text style={styles.footerHint}>Press and hold a recording to rename or delete it</Text>
-      ) : null}
-      {user ? (
-        <Text style={styles.footerText} numberOfLines={1}>
-          Signed in as {user.email}
-        </Text>
-      ) : null}
-      <Button label="Sign out" variant="quiet" onPress={signOut} contentStyle={styles.footerButton} />
+    <Sheet visible={visible} onClose={onClose}>
+      <View style={styles.sheetBody}>
+        {user ? (
+          <Text style={styles.sheetText} numberOfLines={1}>
+            Signed in as {user.email}
+          </Text>
+        ) : null}
+        <Button
+          label="Sign out"
+          pill
+          onPress={() => {
+            onClose();
+            signOut();
+          }}
+        />
+      </View>
+    </Sheet>
+  );
+}
+
+function RecordCard({
+  styles,
+  onRecord,
+  onUpload,
+}: {
+  styles: Styles;
+  onRecord: () => void;
+  onUpload: () => void;
+}) {
+  const c = useColors();
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardTop}>
+        <View style={styles.cardText}>
+          <Text style={styles.cardTitle}>New recording</Text>
+          <Text style={styles.cardBody}>Capture a meeting. Transcript arrives when you stop.</Text>
+        </View>
+        <Pressable
+          onPress={onRecord}
+          accessibilityRole="button"
+          accessibilityLabel="Start recording"
+          style={({ pressed }) => [styles.recordDisc, pressed && styles.recordDiscPressed]}
+        >
+          <MicIcon size={26} color={c.onRecord} />
+        </Pressable>
+      </View>
+      <Pressable
+        onPress={onUpload}
+        accessibilityRole="button"
+        accessibilityLabel="Upload audio file"
+        style={({ pressed }) => [styles.uploadButton, pressed && styles.uploadButtonPressed]}
+      >
+        <UploadIcon size={18} color={c.text} />
+        <Text style={styles.uploadLabel}>Upload audio file</Text>
+      </Pressable>
     </View>
   );
 }
 
 function RecordingRow({
+  styles,
   item,
   onPress,
   onLongPress,
 }: {
+  styles: Styles;
   item: RecordingListItem;
   onPress: () => void;
   onLongPress: () => void;
 }) {
+  const c = useColors();
+  const status = item.summaryStale
+    ? { dot: c.warningDot, label: 'Summary out of date' }
+    : item.hasSummary
+      ? { dot: c.accentDot, label: 'Summary ready' }
+      : { dot: c.bullet, label: 'Transcript only' };
   return (
     <Pressable
       onPress={onPress}
@@ -181,182 +282,251 @@ function RecordingRow({
       delayLongPress={350}
       accessibilityHint="Press and hold to rename or delete"
       accessibilityRole="button"
-      android_ripple={{ color: colors.pressed }}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >
+      <View style={styles.durationTile}>
+        <Text style={styles.durationText}>{formatDuration(item.durationSec)}</Text>
+      </View>
       <View style={styles.rowText}>
         <Text style={styles.rowTitle} numberOfLines={2}>
           {item.title}
         </Text>
-        <Text style={styles.rowMeta}>
-          {formatDuration(item.durationSec)} · {formatDate(item.createdAt)}
-        </Text>
+        <View style={styles.status}>
+          <View style={[styles.statusDot, { backgroundColor: status.dot }]} />
+          <Text style={styles.statusLabel}>{status.label}</Text>
+        </View>
       </View>
-      {item.hasSummary ? <SummaryBadge stale={item.summaryStale} /> : null}
     </Pressable>
   );
 }
 
-/** Present only when a summary exists; amber when the transcript moved under it. */
-function SummaryBadge({ stale }: { stale: boolean }) {
-  return (
-    <View style={[styles.badge, stale && styles.badgeStale]}>
-      <View style={[styles.badgeDot, stale && styles.badgeDotStale]} />
-      <Text style={[styles.badgeLabel, stale && styles.badgeLabelStale]}>
-        {stale ? 'stale' : 'summary'}
-      </Text>
-    </View>
-  );
+function makeStyles(c: Palette) {
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: c.bg,
+    },
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 36,
+      paddingVertical: 48,
+      gap: space.sm,
+    },
+    padded: {
+      paddingHorizontal: space.lg,
+    },
+    listContent: {
+      paddingHorizontal: space.lg,
+    },
+    header: {
+      gap: space.xl,
+      paddingBottom: space.md,
+    },
+
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingTop: space.md,
+    },
+    wordmark: {
+      fontFamily: fonts.sansSemibold,
+      fontSize: 20,
+      letterSpacing: -0.4,
+      color: c.text,
+    },
+    avatar: {
+      width: minHitTarget,
+      height: minHitTarget,
+      borderRadius: radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.avatar,
+    },
+    avatarPressed: {
+      opacity: 0.8,
+    },
+    avatarLetter: {
+      fontFamily: fonts.sansMedium,
+      fontSize: 15,
+      color: c.text,
+    },
+
+    card: {
+      padding: space.xl,
+      gap: 18,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      ...shadow('card', c),
+    },
+    cardTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.lg,
+    },
+    cardText: {
+      flex: 1,
+      gap: 6,
+    },
+    cardTitle: {
+      fontFamily: fonts.sansSemibold,
+      fontSize: 22,
+      letterSpacing: -0.4,
+      color: c.text,
+    },
+    cardBody: {
+      fontFamily: fonts.sans,
+      fontSize: 14,
+      lineHeight: 20,
+      color: c.textSecondary,
+    },
+    recordDisc: {
+      width: 76,
+      height: 76,
+      borderRadius: radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.record,
+      borderWidth: 6,
+      borderColor: c.recordRing,
+    },
+    recordDiscPressed: {
+      transform: [{ scale: 0.96 }],
+    },
+    uploadButton: {
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: space.sm,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+    },
+    uploadButtonPressed: {
+      backgroundColor: c.pressed,
+    },
+    uploadLabel: {
+      fontFamily: fonts.sansMedium,
+      fontSize: 15,
+      color: c.text,
+    },
+
+    recentHeader: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      paddingTop: space.xs,
+    },
+    recentTitle: {
+      fontFamily: fonts.sansSemibold,
+      fontSize: 15,
+      color: c.text,
+    },
+    recentCount: {
+      fontFamily: fonts.mono,
+      fontSize: 12,
+      color: c.textSecondary,
+    },
+
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      minHeight: 68,
+      marginHorizontal: -space.sm,
+      paddingHorizontal: space.sm,
+      paddingVertical: 6,
+      borderRadius: radius.md,
+    },
+    rowPressed: {
+      backgroundColor: c.pressed,
+    },
+    rowGap: {
+      height: 2,
+    },
+    durationTile: {
+      width: 56,
+      height: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+    },
+    durationText: {
+      fontFamily: fonts.mono,
+      fontSize: 12,
+      color: c.durationText,
+    },
+    rowText: {
+      flex: 1,
+      gap: 4,
+    },
+    rowTitle: {
+      fontFamily: fonts.sansMedium,
+      fontSize: 16,
+      lineHeight: 21,
+      color: c.text,
+    },
+    status: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    statusDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    statusLabel: {
+      fontFamily: fonts.sans,
+      fontSize: 13,
+      color: c.textSecondary,
+    },
+
+    empty: {
+      alignItems: 'center',
+      gap: space.sm,
+      paddingHorizontal: space.xl,
+      paddingVertical: 40,
+    },
+    hint: {
+      fontFamily: fonts.sans,
+      fontSize: 13,
+      color: c.textSecondary,
+      textAlign: 'center',
+      marginTop: space.md,
+    },
+    stateTitle: {
+      fontFamily: fonts.sansSemibold,
+      fontSize: 16,
+      color: c.text,
+    },
+    stateBody: {
+      fontFamily: fonts.sans,
+      fontSize: 14,
+      lineHeight: 21,
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+    stateAction: {
+      marginTop: space.md,
+    },
+
+    sheetBody: {
+      gap: space.lg,
+    },
+    sheetText: {
+      fontFamily: fonts.sans,
+      fontSize: 14,
+      color: c.textSecondary,
+      textAlign: 'center',
+    },
+  });
 }
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 36,
-    paddingVertical: 48,
-    gap: space.sm,
-    backgroundColor: colors.bg,
-  },
-  emptyContainer: {
-    flexGrow: 1,
-  },
-
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.lg,
-    minHeight: 72,
-    paddingVertical: space.lg,
-    paddingHorizontal: space.xl,
-  },
-  rowPressed: {
-    backgroundColor: colors.pressed,
-  },
-  rowText: {
-    flex: 1,
-    gap: 6,
-  },
-  rowTitle: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: 16,
-    lineHeight: 21,
-    letterSpacing: -0.2,
-    color: colors.text,
-  },
-  rowMeta: {
-    fontFamily: fonts.mono,
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: space.xl,
-  },
-
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: radius.sm,
-    backgroundColor: colors.accentSoft,
-  },
-  badgeStale: {
-    backgroundColor: colors.warningBg,
-  },
-  badgeDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: colors.accent,
-  },
-  badgeDotStale: {
-    backgroundColor: colors.warning,
-  },
-  badgeLabel: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 10.5,
-    letterSpacing: 0.4,
-    color: colors.accent,
-  },
-  badgeLabelStale: {
-    color: colors.warning,
-  },
-
-  fabWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  fabShadow: {
-    // Android draws elevation only on views that have a background.
-    backgroundColor: colors.accent,
-    borderRadius: 28,
-    elevation: 6,
-    shadowColor: '#1C1A17',
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  fab: {
-    minHeight: 56,
-    paddingHorizontal: 28,
-    borderRadius: 28,
-  },
-  fabDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.record,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-  },
-
-  footer: {
-    alignItems: 'center',
-    gap: 2,
-    paddingTop: 28,
-    paddingHorizontal: space.xl,
-  },
-  footerHint: {
-    fontFamily: fonts.sans,
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: space.md,
-  },
-  footerText: {
-    fontFamily: fonts.sans,
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  footerButton: {
-    minHeight: 40,
-  },
-
-  stateTitle: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: 16,
-    color: colors.text,
-  },
-  stateBody: {
-    fontFamily: fonts.sans,
-    fontSize: 14,
-    lineHeight: 21,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  stateAction: {
-    marginTop: space.md,
-  },
-});
