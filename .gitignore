@@ -9,3 +9,5 @@ storage/
 node_modules/
 .expo/
 __pycache__/
+
+.claude/settings.local.json

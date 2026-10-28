@@ -157,6 +157,14 @@ up outside the repo.
    colleague fails with a 422. Set `GIST_MAIL_FROM` to an address at the
    verified domain once done.
 
+**Or send through Gmail** (any recipient, no domain needed, ~500 mails/day):
+
+1. Turn on 2-Step Verification for the Google account.
+2. Create an app password at myaccount.google.com/apppasswords.
+3. Set `GIST_MAIL_PROVIDER=smtp`, `GIST_SMTP_USERNAME=<the gmail address>` and
+   `GIST_SMTP_PASSWORD=<the 16-character app password>`. Mail is sent from
+   that address; `GIST_MAIL_FROM` and `RESEND_API_KEY` are ignored.
+
 ## Run the app
 
 Android, on a physical phone over Wi-Fi. The phone cannot reach the laptop's
@@ -213,7 +221,10 @@ overridable by environment variable.
 | `GIST_JWT_SECRET` | *(none)* | Base64 of 32+ random bytes; signs session tokens. **Required to start.** |
 | `GIST_ENCRYPTION_KEY` | *(none)* | Base64 of 32 random bytes. **Required to start.** |
 | `RESEND_API_KEY` | *(none)* | Mail API key; email is disabled without it |
-| `GIST_MAIL_FROM` | `Gist <onboarding@resend.dev>` | Sender address |
+| `GIST_MAIL_FROM` | `Gist <onboarding@resend.dev>` | Sender address (Resend only) |
+| `GIST_MAIL_PROVIDER` | `resend` | `resend` or `smtp` |
+| `GIST_SMTP_USERNAME` / `GIST_SMTP_PASSWORD` | *(none)* | SMTP login; for Gmail, the address and an app password |
+| `GIST_SMTP_HOST` / `GIST_SMTP_PORT` | `smtp.gmail.com` / `587` | SMTP server (STARTTLS) |
 | `GIST_DB_URL` | `jdbc:postgresql://localhost:5433/gist` | Database |
 | `GIST_DB_USER` / `GIST_DB_PASSWORD` | `gist` / `gist` | Local dev credentials |
 | `GIST_STORAGE_DIR` | `./storage` | Where converted audio is kept |

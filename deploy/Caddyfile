@@ -1,6 +1,8 @@
 # Caddy obtains and renews the Let's Encrypt certificate for GIST_DOMAIN
 # (e.g. 203-0-113-10.sslip.io) on its own.
+#
+# No `encode gzip`: the app's fetch (Expo, Android) never resolved gzipped
+# responses, so every response over Caddy's 512-byte threshold timed out.
 {$GIST_DOMAIN} {
-	encode gzip
 	reverse_proxy backend:8080
 }

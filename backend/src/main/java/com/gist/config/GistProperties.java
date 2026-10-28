@@ -169,11 +169,20 @@ public class GistProperties {
     }
 
     public static class Mail {
+        private String provider = "resend";
         private String apiKey = "";
         private String from = "Gist <onboarding@resend.dev>";
         private String baseUrl = "https://api.resend.com";
         private int maxRecipients = 10;
         private int sendsPerHour = 20;
+
+        public String getProvider() {
+            return provider;
+        }
+
+        public void setProvider(String provider) {
+            this.provider = provider;
+        }
 
         public String getApiKey() {
             return apiKey;

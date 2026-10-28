@@ -33,6 +33,9 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       GIST_MAIL_FROM: ${GIST_MAIL_FROM:-Gist <onboarding@resend.dev>}
+      GIST_MAIL_PROVIDER: ${GIST_MAIL_PROVIDER:-resend}
+      GIST_SMTP_USERNAME: ${GIST_SMTP_USERNAME:-}
+      GIST_SMTP_PASSWORD: ${GIST_SMTP_PASSWORD:-}
     volumes:
       - audio:/data/storage
 

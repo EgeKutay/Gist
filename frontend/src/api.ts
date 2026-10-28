@@ -73,9 +73,10 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = READ_TIM
   try {
     response = await fetch(`${BASE_URL}${path}`, { ...init, headers, signal: controller.signal });
   } catch (e) {
-    // An aborted fetch and an unreachable host land here alike; the phone
-    // being on the wrong network is by far the likeliest cause.
-    if (e instanceof Error && e.name === 'AbortError') {
+    // An aborted fetch and an unreachable host land here alike. Ask the
+    // signal, not the error: Expo's fetch rejects an abort with a plain
+    // FetchError, not one named AbortError.
+    if (controller.signal.aborted) {
       throw new ApiError('The server took too long to respond.', 0);
     }
     throw unreachable(`fetch ${init?.method ?? 'GET'} ${path}`, e);

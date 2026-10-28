@@ -1,5 +1,7 @@
 package com.gist.resend;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gist.config.GistProperties;
 import com.gist.email.EmailProvider;
 import com.gist.error.ApiException;
@@ -10,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -20,10 +23,12 @@ import org.springframework.web.client.RestClient;
 
 /** Resend's HTTP API. Same client shape as the Groq providers. */
 @Component
+@ConditionalOnProperty(name = "gist.mail.provider", havingValue = "resend", matchIfMissing = true)
 public class ResendEmailProvider implements EmailProvider {
 
     private static final Logger log = LoggerFactory.getLogger(ResendEmailProvider.class);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final RestClient client;
     private final GistProperties props;
@@ -78,22 +83,37 @@ public class ResendEmailProvider implements EmailProvider {
     }
 
     private ApiException mapError(int status, String body) {
-        if (status == 401 || status == 403) {
+        JsonNode error = parse(body);
+        String name = error.path("name").asText("");
+        String message = error.path("message").asText(body == null ? "" : body.strip());
+
+        // Resend answers 403 both for a bad key and for the testing-sender
+        // restriction (validation_error), so the status alone is not enough.
+        if (status == 401 || (status == 403 && !name.equals("validation_error"))) {
             return new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "The mail service rejected the API key. Check RESEND_API_KEY.");
+                    "The mail service rejected the API key. Check RESEND_API_KEY. " + message);
         }
-        if (status == 422 || status == 400) {
+        if (status == 403 || status == 422 || status == 400) {
             // Overwhelmingly the unverified-domain case, which is confusing on
             // first setup because the key and the request are both fine.
             return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
                     "The mail service refused this message. Until a sending domain is verified, "
-                            + "Resend only delivers to your own account address. " + body);
+                            + "Resend only delivers to your own account address. " + message);
         }
         if (status == 429) {
             return new ApiException(HttpStatus.TOO_MANY_REQUESTS,
                     "The mail service is rate limiting. Try again shortly.");
         }
         return new ApiException(HttpStatus.BAD_GATEWAY,
-                "The mail service returned " + status + ". " + body);
+                "The mail service returned " + status + ". " + message);
+    }
+
+    /** Resend reports failures as {"statusCode", "name", "message"}. */
+    private static JsonNode parse(String body) {
+        try {
+            return MAPPER.readTree(body == null ? "" : body);
+        } catch (Exception e) {
+            return MAPPER.missingNode();
+        }
     }
 }

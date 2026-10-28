@@ -12,6 +12,19 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  # Used only when gist.mail.provider is smtp. Defaults suit Gmail; the
+  # password is a Google app password, not the account password.
+  mail:
+    host: ${GIST_SMTP_HOST:smtp.gmail.com}
+    port: ${GIST_SMTP_PORT:587}
+    username: ${GIST_SMTP_USERNAME:}
+    password: ${GIST_SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 30000
+      mail.smtp.writetimeout: 30000
   servlet:
     multipart:
       # A ~2h recording straight off a phone, before ffmpeg shrinks it.
@@ -48,6 +61,8 @@ gist:
     # Failed password attempts per email within 15 minutes before lockout.
     max-failed-logins: 10
   mail:
+    # resend (HTTP API) or smtp (e.g. Gmail with an app password, see spring.mail).
+    provider: ${GIST_MAIL_PROVIDER:resend}
     api-key: ${RESEND_API_KEY:}
     from: ${GIST_MAIL_FROM:Gist <onboarding@resend.dev>}
     base-url: https://api.resend.com
