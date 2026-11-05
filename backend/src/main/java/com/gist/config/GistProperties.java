@@ -140,7 +140,7 @@ public class GistProperties {
 
     public static class Auth {
         private String jwtSecret = "";
-        private int sessionDays = 30;
+        private int sessionDays = 90;
         private int maxFailedLogins = 10;
 
         public String getJwtSecret() {

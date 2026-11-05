@@ -44,8 +44,9 @@ export function setExpiredHandler(handler: (() => void) | null): void {
   onExpired = handler;
 }
 
-export function notifyExpired(): void {
-  if (current) {
+/** `rejected` is the token the failed request carried; a stale one is ignored. */
+export function notifyExpired(rejected: string | null): void {
+  if (current && rejected === current.token) {
     onExpired?.();
   }
 }

@@ -1,12 +1,17 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ApiError, login, me, register, type SessionResponse } from './api';
+import { AppState } from 'react-native';
+import { ApiError, login, refreshSession, register, type SessionResponse } from './api';
 import {
   clearSession,
+  currentToken,
   loadSession,
   saveSession,
   setExpiredHandler,
   type SessionUser,
 } from './session';
+
+/** Coming back to the foreground renews the token at most this often. */
+const REFRESH_EVERY_MS = 60 * 60_000;
 
 type AuthState = {
   user: SessionUser | null;
@@ -30,22 +35,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     setExpiredHandler(expire);
 
+    // Renewing on every launch and resume makes the session last as long as
+    // the app is used. Only a positive 401 signs out; offline just keeps the
+    // current token.
+    let lastRefresh = 0;
+    const refresh = async () => {
+      const sent = currentToken();
+      if (!sent) {
+        return;
+      }
+      lastRefresh = Date.now();
+      try {
+        const fresh = await refreshSession();
+        // Signed out or into another account while this was in flight.
+        if (currentToken() === sent) {
+          await saveSession({ token: fresh.token, user: fresh.user });
+        }
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401 && currentToken() === sent) {
+          expire();
+        }
+      }
+    };
+
     (async () => {
       const stored = await loadSession();
-      // Trust the stored session straight away so the app opens offline; the
-      // check below signs out only if the server positively rejects it.
+      // Trust the stored session straight away so the app opens offline.
       setUser(stored?.user ?? null);
       setInitializing(false);
-      if (stored) {
-        me().catch((e) => {
-          if (e instanceof ApiError && e.status === 401) {
-            expire();
-          }
-        });
-      }
+      refresh();
     })();
 
-    return () => setExpiredHandler(null);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && Date.now() - lastRefresh > REFRESH_EVERY_MS) {
+        refresh();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      setExpiredHandler(null);
+    };
   }, []);
 
   const value = useMemo<AuthState>(() => {

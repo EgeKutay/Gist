@@ -33,7 +33,13 @@ public class AuthController {
         return service.login(body.email(), body.password());
     }
 
-    /** Lets the app check a stored token on launch; 401 if it has expired. */
+    /** A fresh token for a still-valid one; the app calls it on launch. 401 once expired. */
+    @PostMapping("/refresh")
+    public SessionResponse refresh(@AuthenticationPrincipal GistPrincipal user) {
+        return service.refresh(user.uid());
+    }
+
+    /** Kept for app builds from before /refresh; 401 if the token has expired. */
     @GetMapping("/me")
     public SessionResponse.UserView me(@AuthenticationPrincipal GistPrincipal user) {
         return new SessionResponse.UserView(user.uid(), user.email());

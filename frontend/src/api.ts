@@ -89,7 +89,7 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = READ_TIM
   }
 
   if (!response.ok) {
-    throw errorFromResponse(path, response.status, await response.text());
+    throw errorFromResponse(path, token, response.status, await response.text());
   }
 
   if (response.status === 204) {
@@ -109,11 +109,11 @@ function unreachable(what: string, cause: unknown): ApiError {
   );
 }
 
-function errorFromResponse(path: string, status: number, bodyText: string): ApiError {
+function errorFromResponse(path: string, token: string | null, status: number, bodyText: string): ApiError {
   // A rejected token means the session expired; the sign-in routes return
   // 401 for a wrong password, which is not that.
   if (status === 401 && !path.startsWith('/api/auth/')) {
-    notifyExpired();
+    notifyExpired(token);
   }
   let message = `Request failed (${status}).`;
   try {
@@ -143,6 +143,11 @@ export function login(email: string, password: string): Promise<SessionResponse>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
+}
+
+/** Swaps the current, still-valid token for a fresh 90-day one. */
+export function refreshSession(): Promise<SessionResponse> {
+  return request<SessionResponse>('/api/auth/refresh', { method: 'POST' });
 }
 
 export function me(): Promise<SessionUser> {
@@ -242,7 +247,7 @@ export function uploadRecording(
           reject(new ApiError('The server sent a response the app could not read.', xhr.status));
         }
       } else {
-        reject(errorFromResponse(path, xhr.status, xhr.responseText));
+        reject(errorFromResponse(path, token, xhr.status, xhr.responseText));
       }
     };
     // The server keeps working after the app stops waiting, so the recording

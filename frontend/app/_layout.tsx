@@ -59,6 +59,12 @@ function RootNavigator() {
     }
   }, [user, initializing, segments, router]);
 
+  // Mount no screen until the session is restored: the list would otherwise
+  // fetch without a token, and that 401 would sign the restored session out.
+  if (initializing) {
+    return null;
+  }
+
   // Every screen draws its own top bar, as in the mockups; the native header
   // stays configured only so a pushed screen never flashes the wrong colour.
   return (

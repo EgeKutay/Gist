@@ -70,7 +70,8 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.10"
 |---|---|---|
 | `POST` | `/api/auth/register` | `{"email","password"}` → `{token, expiresAt, user}`. Password ≥ 8 chars. |
 | `POST` | `/api/auth/login` | same body and response; 10 wrong passwords per email locks it for 15 min |
-| `GET` | `/api/auth/me` | the signed-in user; 401 once the token has expired |
+| `POST` | `/api/auth/refresh` | a fresh 90-day `{token, expiresAt, user}` for a still-valid token; the app calls it on launch and resume |
+| `GET` | `/api/auth/me` | the signed-in user; 401 once the token has expired. Kept for older app builds |
 | `POST` | `/api/recordings` | multipart field `file`. Converts, transcribes, persists. Synchronous. |
 | `GET` | `/api/recordings` | list, newest first, without transcripts |
 | `GET` | `/api/recordings/{id}` | one recording with transcript and summary |
@@ -79,7 +80,7 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-21.0.10"
 | `PATCH` | `/api/recordings/{id}` | rename; `{"title":"..."}` |
 | `POST` | `/api/recordings/{id}/email` | mail the summary and/or transcript; `{"to":[...], "includeSummary":true, "includeTranscript":false}`, all optional |
 
-Every route except `/api/health`, register and login requires `Authorization: Bearer <token>` and only ever returns the caller's own recordings. Tokens last 30 days; there is no server-side session, so signing out just discards the token.
+Every route except `/api/health`, register and login requires `Authorization: Bearer <token>` and only ever returns the caller's own recordings. Tokens last 90 days and the app renews them on every launch, so a session only expires after 90 days without opening the app; there is no server-side session, so signing out just discards the token.
 
 ```powershell
 # Sign up once (or /login afterwards) and keep the token
@@ -127,7 +128,7 @@ Everything here is free-tier.
 ### 1. Accounts
 
 Email + password, handled by the backend itself: bcrypt hashes in the `users`
-table, 30-day HS256 tokens signed with `GIST_JWT_SECRET` (already generated into
+table, 90-day HS256 tokens (renewed on each app launch) signed with `GIST_JWT_SECRET` (already generated into
 `.env`; make another the same way as the encryption key below, but never reuse
 it). Changing the secret signs everyone out. There is no password reset yet --
 it needs working email first.

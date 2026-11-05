@@ -85,6 +85,17 @@ public class AuthService {
         return session(user);
     }
 
+    /**
+     * Swaps a still-valid token for a fresh one, so a session lasts as long as
+     * the app keeps being opened. Reads the account so a deleted user cannot
+     * keep renewing a token forever.
+     */
+    public SessionResponse refresh(UUID userId) {
+        User user = users.findById(userId).orElseThrow(() -> new ApiException(
+                HttpStatus.UNAUTHORIZED, "This account no longer exists. Sign in again."));
+        return session(user);
+    }
+
     private SessionResponse session(User user) {
         TokenService.Issued issued = tokens.issue(user.getId(), user.getEmail());
         return new SessionResponse(issued.token(), issued.expiresAt(),

@@ -46,7 +46,7 @@ Packages live under `com.gist`, and each one has a single job:
 - `transcription`, `summarization`, `email`: provider **interfaces**.
 - `groq`, `resend`: their only implementations. `GroqErrors` maps Groq HTTP failures (429 with retry-after, 404 unknown model, 401 bad key, request too large, context length exceeded) to user-facing messages, worded per `Step` (transcription or summarization). A summary cut off at `finish_reason: length` is reported as such, not as invalid JSON.
 - `auth`: email and password accounts in the `users` table (bcrypt). `AuthController` serves `/api/auth/register`, `/login` and `/me`. `AuthService` normalizes emails to lowercase, gives an unknown email and a wrong password the same message and the same timing, and locks an email after too many failures (in memory, 15 min window).
-- `security`: `TokenService` issues and verifies 30-day HS256 JWTs signed with `GIST_JWT_SECRET`. `TokenAuthFilter` reads the `Bearer` token on every request and sets a `GistPrincipal(uid, email)` from the claims alone, with no DB read. Sessions are stateless: there is no session table, signing out means the client drops the token, and rotating the secret signs everyone out. `/api/health`, `/api/auth/register` and `/api/auth/login` are the only public routes.
+- `security`: `TokenService` issues and verifies 90-day HS256 JWTs signed with `GIST_JWT_SECRET`. The app swaps its token for a fresh one through `POST /api/auth/refresh` on launch and on resume (at most hourly), so a session expires only after 90 days unused; refresh is the one auth path that reads the `users` row. `TokenAuthFilter` reads the `Bearer` token on every request and sets a `GistPrincipal(uid, email)` from the claims alone, with no DB read. Sessions are stateless: there is no session table, signing out means the client drops the token, and rotating the secret signs everyone out. `/api/health`, `/api/auth/register` and `/api/auth/login` are the only public routes.
 - Spring beans with more than one constructor (such as `TokenService`, which has a package-private one that takes a `Clock` for tests) need `@Autowired` on the one Spring should use. Otherwise startup fails with "No default constructor found".
 - `recipient`: suggested recipients for the email panel (`saved_recipients`, plaintext lowercased like `users.email`). `RecordingService.emailRecording` upserts them after a successful send, never for the user's own address. `GET /api/recipients` and `DELETE /api/recipients/{id}`.
 - `crypto`: `FieldEncryptor` (AES-256-GCM, random IV per value) plus JPA `AttributeConverter`s.
@@ -93,7 +93,7 @@ is not a correctness oracle.
 - Routes live in `frontend/app/`: `_layout.tsx` (fonts, `AuthProvider`, and a redirect to `/sign-in` when signed out), `index.tsx` (list), `sign-in.tsx`, `recording/new.tsx` (record with expo-audio, then upload), and `recording/[id].tsx` (transcript, summarize, summary sections, email).
 - `src/api.ts` is the only HTTP client. It attaches the session token as `Authorization: Bearer`, applies timeouts (15 s for reads, 5 min for uploads) and turns failures into `ApiError` with the backend's message. Any 401 calls `notifyExpired()`, which signs the app out. `EXPO_PUBLIC_API_URL` must be the laptop's LAN IP, not localhost. On an Android emulator, `http://10.0.2.2:8080` also works.
 - `src/session.ts` keeps the session in `expo-secure-store` (Keychain or Android Keystore), not AsyncStorage, and also holds it in memory so `api.ts` can read the token synchronously.
-- `src/auth.tsx` (`AuthProvider` / `useAuth`) trusts the stored session at launch so the app opens offline, then calls `/api/auth/me` and signs out only on a 401.
+- `src/auth.tsx` (`AuthProvider` / `useAuth`) trusts the stored session at launch so the app opens offline, then calls `/api/auth/refresh` (also on resume, at most hourly), saves the renewed token, and signs out only on a 401.
 - `src/RecordingActions.tsx` is the rename/delete sheet. The list opens it on long-press and the meeting screen opens it from its top-bar ⋯ button.
 - Every screen draws its own top bar, and the native Stack header is hidden. The detail screen has a fixed bottom bar: Email summary or Summarize on the Summary tab, and Edit / Email on the Transcript tab. Email opens a `Sheet`. Home's "Upload audio file" pushes `/recording/new?pick=1`, so there is only one upload flow.
 - `src/icons.tsx` has the stroke icons (react-native-svg, 2 px stroke).
@@ -106,3 +106,21 @@ is not a correctness oracle.
 - `summary_original` is stored but nothing reads it yet. It is meant for reverting user edits to the summary, and those edits don't exist yet.
 - There is no password reset yet. It depends on having working email first.
 - Backend tests cover only `crypto/`, `TokenService` and `GroqErrors`. Nothing else has tests.
+
+## Deployment: always delegate
+
+When the user says **deploy** after feature work, do not deploy yourself.
+Hand the job to the two dedicated subagents in `.claude/agents/`. Both run on
+Sonnet at medium effort, and both are deployment-only: they never change
+application code.
+
+| Request | Spawn |
+|---|---|
+| "deploy" | both, in parallel |
+| "deploy backend" / "deploy BE" | `gist-backend-deployer` only |
+| "deploy app" / "build the APK" / "release FE" | `gist-apk-releaser` only |
+
+- `gist-backend-deployer` copies `backend/` to `/opt/gist/backend` on the Hetzner box (`root@135.181.41.98`, key `~/.ssh/id_ed25519`). It dumps the DB and backs up the old code first, runs `docker compose up -d --build backend` in `/opt/gist/deploy`, checks `/api/health` through Caddy, and rolls back if that fails.
+- `gist-apk-releaser` runs `tsc`, bumps the version, and runs `gradlew assembleRelease` locally with `EXPO_PUBLIC_API_URL=https://135-181-41-98.sslip.io`. It checks that the URL is in the bundle and writes `../releases/Gist-v<version>.apk`, which the user copies to their phone. There is no store and no EAS.
+- Both append to `../deploy-log.md`, outside the repo, so the next session knows what is live.
+- If an agent stops because the build or tests failed, fix the code yourself, then spawn the agent again. Relay its report (APK path, health result, warnings) to the user.

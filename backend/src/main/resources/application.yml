@@ -56,8 +56,9 @@ gist:
     # Base64 of 32+ random bytes; signs session tokens. Startup fails if absent.
     # Changing it signs everyone out.
     jwt-secret: ${GIST_JWT_SECRET:}
-    # How long a sign-in lasts before the app asks for the password again.
-    session-days: 30
+    # How long a session lasts without opening the app. Each launch swaps the
+    # token for a fresh one (POST /api/auth/refresh), so regular use never expires.
+    session-days: 90
     # Failed password attempts per email within 15 minutes before lockout.
     max-failed-logins: 10
   mail:
